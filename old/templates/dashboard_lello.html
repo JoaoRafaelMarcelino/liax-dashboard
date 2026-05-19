@@ -1,0 +1,2497 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Liax Dashboard - Origem Clickup</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .task-card {
+            transition: all 0.3s ease;
+        }
+        .task-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+        .status-badge {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .loading-spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #7b68ee;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .accordion-content {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            padding: 0;
+        }
+        .accordion-content.open {
+            max-height: 1000px;
+            padding: 1.5rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Header -->
+    <header class="bg-gradient-to-r from-purple-600 to-indigo-600 text-white shadow-lg">
+        <div class="container mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-4">
+                    <i class="fas fa-tasks text-3xl"></i>
+                    <div>
+                        <h1 class="text-2xl font-bold">Liax Dashboard - Origem Clickup</h1>
+                        <div class="flex items-center space-x-2 mt-1">
+                            <span class="text-sm text-white/80">Projeto:</span>
+                            <select id="project-selector" class="bg-white/20 text-white border border-white/30 rounded px-3 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-white/50 cursor-pointer" onchange="changeProject()">
+                                {% if projects %}
+                                    {% for project in projects %}
+                                        <option value="{{ project.url }}" {% if loop.first %}selected{% endif %}>{{ project.name }}</option>
+                                    {% endfor %}
+                                {% else %}
+                                    <option value="">Nenhum projeto configurado</option>
+                                {% endif %}
+                            </select>
+                        </div>
+                    </div>
+                </div>
+                <button onclick="loadTasks()" class="bg-white text-purple-600 px-4 py-2 rounded-lg font-semibold hover:bg-purple-50 transition">
+                    <i class="fas fa-sync-alt mr-2"></i>Atualizar
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Tab Navigation -->
+    <div class="bg-white shadow-sm">
+        <div class="container mx-auto px-6">
+            <div class="flex space-x-4 border-b border-gray-300">
+                <button onclick="switchTab('status')" class="tab-btn px-6 py-3 font-semibold text-purple-600 border-b-2 border-purple-600 bg-purple-50" id="tab-status">
+                    <i class="fas fa-columns mr-2"></i>Por Status
+                </button>
+                <button onclick="switchTab('overview')" class="tab-btn px-6 py-3 font-semibold text-gray-600 hover:text-purple-600 border-b-2 border-transparent hover:border-purple-300" id="tab-overview">
+                    <i class="fas fa-chart-line mr-2"></i>Visão Geral
+                </button>
+                <button onclick="switchTab('distribution')" class="tab-btn px-6 py-3 font-semibold text-gray-600 hover:text-purple-600 border-b-2 border-transparent hover:border-purple-300" id="tab-distribution">
+                    <i class="fas fa-chart-pie mr-2"></i>Distribuição
+                </button>
+                <button onclick="switchTab('program')" class="tab-btn px-6 py-3 font-semibold text-gray-600 hover:text-purple-600 border-b-2 border-transparent hover:border-purple-300" id="tab-program">
+                    <i class="fas fa-laptop-code mr-2"></i>Por Programa
+                </button>
+                <button onclick="switchTab('executive')" class="tab-btn px-6 py-3 font-semibold text-gray-600 hover:text-purple-600 border-b-2 border-transparent hover:border-purple-300" id="tab-executive">
+                    <i class="fas fa-chart-bar mr-2"></i>Métricas Executivas
+                </button>
+                <button onclick="switchTab('tasks')" class="tab-btn px-6 py-3 font-semibold text-gray-600 hover:text-purple-600 border-b-2 border-transparent hover:border-purple-300" id="tab-tasks">
+                    <i class="fas fa-list mr-2"></i>Lista de Tarefas
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Loading State (Outside Tabs) -->
+    <div id="loading" class="hidden flex flex-col items-center justify-center py-8">
+        <div class="loading-spinner mb-2" style="width: 32px; height: 32px;"></div>
+        <p class="text-gray-600 text-sm mb-1">Carregando tarefas...</p>
+        <p id="loading-progress" class="text-gray-500 text-xs">Iniciando...</p>
+    </div>
+
+    <!-- Cache Notice (Outside Tabs) -->
+    <div id="cache-notice" class="hidden bg-blue-50 border border-blue-200 rounded-lg px-4 py-2 mb-4 flex items-center justify-between container mx-auto mt-4 max-w-4xl">
+        <div class="flex items-center">
+            <i class="fas fa-database text-blue-500 text-sm mr-2"></i>
+            <div>
+                <p class="text-blue-700 text-sm">Dados carregados do cache</p>
+                <p class="text-blue-600 text-xs">Última atualização: <span id="cache-time">--</span></p>
+            </div>
+        </div>
+        <div class="flex items-center space-x-2">
+            <button onclick="forceRefresh()" class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 transition">
+                <i class="fas fa-sync-alt mr-1"></i>Atualizar
+            </button>
+            <button onclick="hideCacheNotice()" class="px-2 py-1 text-blue-600 hover:text-blue-800 transition">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- Error State (Outside Tabs) -->
+    <div id="error" class="hidden bg-red-50 border border-red-200 rounded-xl p-6 mb-8 container mx-auto mt-8">
+        <div class="flex items-center">
+            <i class="fas fa-exclamation-circle text-red-500 text-2xl mr-4"></i>
+            <div>
+                <p class="font-semibold text-red-700">Erro ao carregar tarefas</p>
+                <p id="error-message" class="text-red-600"></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 2: Overview -->
+    <div id="content-overview" class="tab-content container mx-auto px-6 py-8">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-5 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Total de Tarefas</p>
+                        <p id="total-tasks" class="text-3xl font-bold text-gray-800">-</p>
+                    </div>
+                    <div class="bg-purple-100 p-3 rounded-full">
+                        <i class="fas fa-list-ul text-purple-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Migrações</p>
+                        <p id="task-count" class="text-3xl font-bold text-gray-800">-</p>
+                    </div>
+                    <div class="bg-blue-100 p-3 rounded-full">
+                        <i class="fas fa-tasks text-blue-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Bugs</p>
+                        <p id="bug-count" class="text-3xl font-bold text-gray-800">-</p>
+                    </div>
+                    <div class="bg-red-100 p-3 rounded-full">
+                        <i class="fas fa-bug text-red-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Melhorias</p>
+                        <p id="improvement-count" class="text-3xl font-bold text-gray-800">-</p>
+                    </div>
+                    <div class="bg-green-100 p-3 rounded-full">
+                        <i class="fas fa-arrow-up text-green-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Status Únicos</p>
+                        <p id="unique-status" class="text-3xl font-bold text-gray-800">-</p>
+                    </div>
+                    <div class="bg-yellow-100 p-3 rounded-full">
+                        <i class="fas fa-tags text-yellow-600 text-xl"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Additional Indicators -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">
+                    <i class="fas fa-flag mr-2 text-orange-500"></i>Por Prioridade
+                </h3>
+                <div id="priority-distribution" class="space-y-2">
+                    <!-- Priority distribution will be rendered here -->
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">
+                    <i class="fas fa-users mr-2 text-blue-500"></i>Top Criadores
+                </h3>
+                <div id="top-creators" class="space-y-2">
+                    <!-- Top creators will be rendered here -->
+                </div>
+            </div>
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4">
+                    <i class="fas fa-clock mr-2 text-purple-500"></i>Tarefas Recentes
+                </h3>
+                <div id="recent-tasks" class="space-y-2">
+                    <!-- Recent tasks will be rendered here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 2: Distribution -->
+    <div id="content-distribution" class="tab-content container mx-auto px-6 py-8">
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <!-- Status Distribution -->
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-chart-bar mr-2 text-purple-600"></i>Distribuição por Status
+                </h2>
+                <div id="status-distribution" class="grid grid-cols-2 gap-4">
+                    <!-- Status cards will be rendered here -->
+                </div>
+            </div>
+
+            <!-- Type Distribution -->
+            <div class="bg-white rounded-xl shadow-md p-6">
+                <h2 class="text-xl font-bold text-gray-800 mb-4">
+                    <i class="fas fa-layer-group mr-2 text-blue-600"></i>Distribuição por Tipo
+                </h2>
+                <div id="type-distribution" class="space-y-4">
+                    <!-- Type distribution will be rendered here -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Grouping Section -->
+        <div class="bg-white rounded-xl shadow-md p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4">
+                <i class="fas fa-layer-group mr-2 text-green-600"></i>Agrupar por
+            </h2>
+            <div class="flex flex-wrap items-center gap-4 mb-6">
+                <select id="group-by" class="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="renderGrouping()">
+                    <option value="status">Status</option>
+                    <option value="assignee">Responsável</option>
+                    <option value="priority">Prioridade</option>
+                    <option value="type">Tipo</option>
+                    <option value="due_date">Data de Vencimento</option>
+                    <option value="start_date">Data Inicial</option>
+                </select>
+            </div>
+            <div id="grouping-results" class="space-y-4">
+                <!-- Grouping results will be rendered here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 3: Tasks List with Accordion -->
+    <div id="content-tasks" class="tab-content container mx-auto px-6 py-8">
+        <!-- Filters -->
+        <div class="bg-white rounded-xl shadow-md mb-8">
+            <!-- Filter Header -->
+            <div class="px-6 py-4 border-b border-gray-200 flex items-center justify-between cursor-pointer hover:bg-gray-50 transition" onclick="toggleFilters()">
+                <h2 class="text-lg font-bold text-gray-800">
+                    <i class="fas fa-filter mr-2 text-purple-600"></i>Filtros
+                </h2>
+                <i id="filter-toggle-icon" class="fas fa-chevron-down text-gray-500 transition-transform"></i>
+            </div>
+            
+            <!-- Filter Content -->
+            <div id="filter-content" class="accordion-content">
+                <!-- Search Bar -->
+                <div class="mb-6">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Buscar</label>
+                <input type="text" id="search-input" placeholder="Digite para buscar tarefas..." 
+                       class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                       onkeyup="filterTasks()">
+            </div>
+
+            <!-- Filter Grid -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Status -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Status</label>
+                    <select id="status-filter" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="filterTasks()">
+                        <option value="">Todos os Status</option>
+                    </select>
+                </div>
+
+                <!-- Type -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Tipo</label>
+                    <select id="type-filter" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="filterTasks()">
+                        <option value="">Todos os Tipos</option>
+                        <option value="0">Migração</option>
+                        <option value="1004">Bug</option>
+                        <option value="1005">Melhoria</option>
+                    </select>
+                </div>
+
+                <!-- Priority -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Prioridade</label>
+                    <select id="priority-filter" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="filterTasks()">
+                        <option value="">Todas as Prioridades</option>
+                        <option value="urgent">Urgente</option>
+                        <option value="high">Alta</option>
+                        <option value="normal">Normal</option>
+                        <option value="low">Baixa</option>
+                    </select>
+                </div>
+
+                <!-- Assignee -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Responsável</label>
+                    <select id="assignee-filter" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="filterTasks()">
+                        <option value="">Todos os Responsáveis</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Date Filters -->
+            <div class="mt-6">
+                <h3 class="text-sm font-medium text-gray-700 mb-3">Filtro de Datas</h3>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div>
+                        <select id="date-filter" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="filterTasks()">
+                            <option value="">Tipo de Data</option>
+                            <option value="due_date">Data de Vencimento</option>
+                            <option value="start_date">Data Inicial</option>
+                            <option value="date_created">Data Criada</option>
+                            <option value="date_updated">Data Atualizada</option>
+                            <option value="date_closed">Data Encerrada</option>
+                        </select>
+                    </div>
+                    <div>
+                        <input type="date" id="date-from" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="filterTasks()">
+                    </div>
+                    <div>
+                        <input type="date" id="date-to" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="filterTasks()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Time Filters -->
+            <div class="mt-6">
+                <h3 class="text-sm font-medium text-gray-700 mb-3">Filtro de Tempo</h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                        <select id="time-filter" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="filterTasks()">
+                            <option value="">Selecione</option>
+                            <option value="spent">Tempo Gasto</option>
+                            <option value="estimate">Estimativa</option>
+                        </select>
+                    </div>
+                    <div>
+                        <input type="number" id="time-min" placeholder="Mínimo (min)" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="filterTasks()">
+                    </div>
+                    <div>
+                        <input type="number" id="time-max" placeholder="Máximo (min)" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="filterTasks()">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Custom Field Filters -->
+            <div class="mt-6">
+                <h3 class="text-sm font-medium text-gray-700 mb-3">Campo Personalizado</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <select id="custom-field-filter" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onchange="filterTasks()">
+                            <option value="">Selecione o Campo</option>
+                            <option value="67d33bf2-ed75-4164-baaf-5318e883d137">Quantidade de Linhas</option>
+                            <option value="67db9e6f-e73a-4f76-9195-b81a5a57e728">Prioridade</option>
+                            <option value="90b50000-51a5-4337-b412-0098005978fb">Ordem de Atendimento</option>
+                            <option value="63d99c5a-51ae-4ee2-a9cd-9e6878934e62">Bugs em Aberto</option>
+                            <option value="4d3c26a5-4e09-403b-a0d6-26bdf286c013">Bugs Totais</option>
+                        </select>
+                    </div>
+                    <div>
+                        <input type="text" id="custom-field-value" placeholder="Valor do campo" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent" onkeyup="filterTasks()">
+                    </div>
+                </div>
+            </div>
+            </div>
+        </div>
+
+        <!-- Tasks Accordion List -->
+        <div id="tasks-container" class="space-y-4 hidden">
+            <!-- Tasks will be rendered here -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="hidden text-center py-20">
+            <i class="fas fa-inbox text-gray-300 text-6xl mb-4"></i>
+            <p class="text-gray-500 text-xl">Nenhuma tarefa encontrada</p>
+        </div>
+    </div>
+
+    <!-- Tab 1: Status -->
+    <div id="content-status" class="tab-content active container mx-auto px-6 py-8">
+        <!-- Sub-tabs for task types -->
+        <div class="flex space-x-4 border-b border-gray-300 mb-6">
+            <button onclick="switchStatusTab('migrations')" class="status-tab-btn px-6 py-3 font-semibold text-purple-600 border-b-2 border-purple-600 bg-purple-50" id="status-tab-migrations">
+                <i class="fas fa-tasks mr-2"></i>Migrações
+            </button>
+            <button onclick="switchStatusTab('improvements')" class="status-tab-btn px-6 py-3 font-semibold text-gray-600 hover:text-purple-600 border-b-2 border-transparent hover:border-purple-300" id="status-tab-improvements">
+                <i class="fas fa-arrow-up mr-2"></i>Melhorias
+            </button>
+            <button onclick="switchStatusTab('bugs')" class="status-tab-btn px-6 py-3 font-semibold text-gray-600 hover:text-purple-600 border-b-2 border-transparent hover:border-purple-300" id="status-tab-bugs">
+                <i class="fas fa-bug mr-2"></i>Bugs
+            </button>
+        </div>
+
+        <!-- Status content for migrations -->
+        <div id="status-content-migrations" class="status-content">
+            <!-- Will be rendered by JavaScript -->
+        </div>
+
+        <!-- Status content for improvements -->
+        <div id="status-content-improvements" class="status-content hidden">
+            <!-- Will be rendered by JavaScript -->
+        </div>
+
+        <!-- Status content for bugs -->
+        <div id="status-content-bugs" class="status-content hidden">
+            <!-- Will be rendered by JavaScript -->
+        </div>
+    </div>
+
+    <!-- Tab: Por Programa -->
+    <div id="content-program" class="tab-content container mx-auto px-6 py-8">
+        <div class="flex items-center justify-between mb-6">
+            <h2 class="text-2xl font-bold text-gray-800">
+                <i class="fas fa-laptop-code mr-2 text-purple-600"></i>Bugs por Programa
+            </h2>
+            <div class="bg-white rounded-lg shadow-md px-6 py-3">
+                <span class="text-gray-600 text-sm">Média de bugs por programa: </span>
+                <span id="avg-bugs-per-program" class="text-2xl font-bold text-purple-600">-</span>
+            </div>
+        </div>
+        <div id="program-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            <!-- Programs will be rendered here -->
+        </div>
+        <div id="program-empty-state" class="hidden text-center py-20">
+            <i class="fas fa-laptop-code text-gray-300 text-6xl mb-4"></i>
+            <p class="text-gray-500 text-xl">Nenhum bug encontrado</p>
+        </div>
+    </div>
+
+    <!-- Tab: Métricas Executivas -->
+    <div id="content-executive" class="tab-content container mx-auto px-6 py-8">
+        <h2 class="text-2xl font-bold text-gray-800 mb-6">
+            <i class="fas fa-chart-bar mr-2 text-purple-600"></i>Métricas Executivas
+        </h2>
+
+        <!-- Filtro de Semanas -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">
+                <i class="fas fa-filter mr-2 text-purple-600"></i>Filtro de Semanas
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Semana Inicial</label>
+                    <select id="week-start" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" onchange="applyWeekFilter()">
+                        <option value="">Todas as semanas</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Semana Final</label>
+                    <select id="week-end" class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500" onchange="applyWeekFilter()">
+                        <option value="">Todas as semanas</option>
+                    </select>
+                </div>
+                <div class="flex items-end">
+                    <button onclick="resetWeekFilter()" class="w-full px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition">
+                        <i class="fas fa-undo mr-2"></i>Resetar Filtro
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Migrações por Semana (Gráfico) -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">
+                <i class="fas fa-calendar-week mr-2 text-blue-600"></i>Migrações por Semana (número de migrações concluídas por semana)
+            </h3>
+            <div class="h-64">
+                <canvas id="migrations-per-week-chart"></canvas>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">
+                <strong>Extração de dados:</strong> Filtra tarefas com custom_item_id=0, status contém 'homolog' e sem bugs (campos 'Bugs em Aberto' e 'Bugs Totais' = 0), agrupa por semana usando date_updated, aplica filtro de semanas selecionado
+            </p>
+        </div>
+
+        <!-- Tempo Médio de Migração -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">
+                <i class="fas fa-clock mr-2 text-green-600"></i>Tempo Médio de Migração (tempo em dias desde criação até entrada em homologação)
+            </h3>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="bg-blue-50 rounded-lg p-4">
+                    <p class="text-sm text-gray-600">Tempo Médio Total</p>
+                    <p id="avg-migration-time" class="text-2xl font-bold text-blue-600">-</p>
+                </div>
+                <div class="bg-green-50 rounded-lg p-4">
+                    <p class="text-sm text-gray-600">Mais Rápido</p>
+                    <p id="fastest-migration" class="text-2xl font-bold text-green-600">-</p>
+                </div>
+                <div class="bg-red-50 rounded-lg p-4">
+                    <p class="text-sm text-gray-600">Mais Lento</p>
+                    <p id="slowest-migration" class="text-2xl font-bold text-red-600">-</p>
+                </div>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">
+                <strong>Extração de dados:</strong> Calcula (date_updated - date_created) em dias para tarefas com custom_item_id=0, status contém 'homolog' e sem bugs, calcula média, mínimo e máximo
+            </p>
+        </div>
+
+        <!-- Migrações por Status Atual (Gráfico) -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">
+                <i class="fas fa-tasks mr-2 text-purple-600"></i>Migrações por Status Atual (distribuição de migrações por status atual)
+            </h3>
+            <div class="h-64">
+                <canvas id="migrations-by-status-chart"></canvas>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">
+                <strong>Extração de dados:</strong> Filtra tarefas com custom_item_id=0, agrupa por status.status, conta por categoria
+            </p>
+        </div>
+
+        <!-- Tarefas Concluídas por Semana (Gráfico) -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">
+                <i class="fas fa-check-circle mr-2 text-green-600"></i>Tarefas Concluídas por Semana (total de tarefas concluídas por semana)
+            </h3>
+            <div class="h-64">
+                <canvas id="tasks-completed-per-week-chart"></canvas>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">
+                <strong>Extração de dados:</strong> Filtra tarefas com date_done, agrupa por semana usando date_done, aplica filtro de semanas selecionado
+            </p>
+        </div>
+
+        <!-- Atuações por Colaborador (Gráfico) -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">
+                <i class="fas fa-users mr-2 text-orange-600"></i>Atuações por Colaborador (número de tarefas por colaborador)
+            </h3>
+            <div class="h-64">
+                <canvas id="tasks-by-developer-chart"></canvas>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">
+                <strong>Extração de dados:</strong> Itera por todas as tarefas, conta por assignee.username, aplica filtro de semanas selecionado
+            </p>
+        </div>
+
+        <!-- Atuações por Tipo (QA vs Desenvolvimento) -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">
+                <i class="fas fa-code mr-2 text-blue-600"></i>Atuações por Tipo (QA vs Desenvolvimento)
+            </h3>
+            
+            <!-- Analistas de QA -->
+            <div class="mb-6">
+                <h4 class="text-md font-semibold text-gray-700 mb-3">
+                    <i class="fas fa-bug mr-2 text-red-600"></i>Analistas de QA (número de tarefas por analista de QA)
+                </h4>
+                <div class="h-64">
+                    <canvas id="tasks-by-qa-chart"></canvas>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">
+                    <strong>Extração de dados:</strong> Classifica colaboradores como QA (Thiago, Ana Keila, Juliana Oliveira, Pedro Samuel, Cristian), conta tarefas por analista, aplica filtro de semanas selecionado
+                </p>
+            </div>
+            
+            <!-- Analistas de Desenvolvimento -->
+            <div>
+                <h4 class="text-md font-semibold text-gray-700 mb-3">
+                    <i class="fas fa-code mr-2 text-blue-600"></i>Analistas de Desenvolvimento (número de tarefas por analista de desenvolvimento)
+                </h4>
+                <div class="h-64">
+                    <canvas id="tasks-by-dev-chart"></canvas>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">
+                    <strong>Extração de dados:</strong> Classifica colaboradores como Desenvolvimento (todos que não são QA), conta tarefas por analista, aplica filtro de semanas selecionado
+                </p>
+            </div>
+        </div>
+
+        <!-- Bugs por Semana (Gráfico) -->
+        <div class="bg-white rounded-xl shadow-md p-6 mb-6">
+            <h3 class="text-lg font-bold text-gray-800 mb-4">
+                <i class="fas fa-bug mr-2 text-red-600"></i>Bugs por Semana (número de bugs criados por semana)
+            </h3>
+            <div class="h-64">
+                <canvas id="bugs-per-week-chart"></canvas>
+            </div>
+            <p class="text-xs text-gray-500 mt-2">
+                <strong>Extração de dados:</strong> Filtra tarefas com custom_item_id=1004, agrupa por semana usando date_created, aplica filtro de semanas selecionado
+            </p>
+        </div>
+    </div>
+
+    <script>
+        let allTasks = [];
+        let filteredTasks = [];
+        let currentProjectUrl = null;
+        let chartInstances = {}; // Armazenar instâncias dos gráficos para destruí-las antes de recriar
+        let weekFilter = { start: '', end: '' }; // Filtro de semanas
+        let availableWeeks = []; // Lista de semanas disponíveis
+
+        // Get current project URL from selector
+        function getCurrentProjectUrl() {
+            const selector = document.getElementById('project-selector');
+            return selector ? selector.value : null;
+        }
+
+        // Fetch tasks from API with progress
+        async function fetchTasks(forceRefresh = false) {
+            const projectUrl = getCurrentProjectUrl();
+            if (!projectUrl) return;
+
+            try {
+                let url = `/api/tasks/stream?project_url=${encodeURIComponent(projectUrl)}`;
+                if (forceRefresh) {
+                    url += '&force_refresh=true';
+                }
+
+                const response = await fetch(url);
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { value, done } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value, { stream: true });
+                    buffer += chunk;
+
+                    // Processar linhas completas
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop(); // Manter a última linha incompleta no buffer
+
+                    for (const line of lines) {
+                        if (line.trim() && line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+
+                                if (data.type === 'progress') {
+                                    updateLoadingProgress(data.page, data.tasks_on_page, data.total_tasks);
+                                } else if (data.type === 'complete') {
+                                    if (data.result.success) {
+                                        allTasks = data.result.tasks;
+                                        filteredTasks = [...allTasks];
+                                        updateStats();
+                                        populateFilters();
+                                        renderTasks();
+                                        hideLoading();
+
+                                        // Verificar se veio do cache
+                                        if (data.result.from_cache) {
+                                            const cachedAt = new Date(data.result.cached_at);
+                                            // Sempre mostrar prompt para usuário decidir se quer atualizar
+                                            showCacheNoticeWithPrompt(cachedAt);
+                                        } else {
+                                            hideCacheNotice();
+                                        }
+                                    } else {
+                                        showError(data.result.error);
+                                    }
+                                } else if (data.type === 'error') {
+                                    showError(data.message);
+                                }
+                            } catch (parseError) {
+                                console.error('Erro ao fazer parse do JSON:', parseError, 'Linha:', line);
+                            }
+                        }
+                    }
+                }
+            } catch (error) {
+                showError('Erro ao buscar tarefas: ' + error.message);
+            }
+        }
+
+        function forceRefresh() {
+            hideCacheNotice();
+            // Não esconde os dados antigos durante o refresh
+            showLoadingIndicator();
+            fetchTasks(true);
+        }
+
+        function showLoadingIndicator() {
+            const loading = document.getElementById('loading');
+            const progressEl = document.getElementById('loading-progress');
+            loading.classList.remove('hidden');
+            progressEl.textContent = 'Atualizando dados...';
+        }
+
+        function showCacheNotice() {
+            const cacheNotice = document.getElementById('cache-notice');
+            const cacheTime = document.getElementById('cache-time');
+            cacheNotice.classList.remove('hidden');
+            cacheTime.textContent = new Date().toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        }
+
+        function showCacheNoticeWithPrompt(cachedAt) {
+            const cacheNotice = document.getElementById('cache-notice');
+            const cacheTime = document.getElementById('cache-time');
+            cacheNotice.classList.remove('hidden');
+            // Formatar para o fuso horário de São Paulo
+            const options = {
+                timeZone: 'America/Sao_Paulo',
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            };
+            cacheTime.textContent = cachedAt.toLocaleString('pt-BR', options);
+            
+            // Adicionar botão de prompt para atualizar
+            const existingPrompt = document.getElementById('cache-prompt');
+            if (existingPrompt) existingPrompt.remove();
+            
+            const prompt = document.createElement('div');
+            prompt.id = 'cache-prompt';
+            prompt.className = 'mt-2 text-sm text-blue-600';
+            prompt.innerHTML = `
+                <span>Dados atualizados há menos de 1 hora. </span>
+                <button onclick="forceRefresh()" class="underline hover:text-blue-800">Atualizar agora?</button>
+            `;
+            cacheNotice.appendChild(prompt);
+        }
+
+        function hideCacheNotice() {
+            const cacheNotice = document.getElementById('cache-notice');
+            cacheNotice.classList.add('hidden');
+        }
+
+        function updateLoadingProgress(page, tasksOnPage, totalTasks) {
+            const progressEl = document.getElementById('loading-progress');
+            progressEl.textContent = `Página ${page}: ${tasksOnPage} tarefas carregadas (Total: ${totalTasks})`;
+        }
+
+        function showLoading() {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const tasksContainer = document.getElementById('tasks-container');
+            const emptyState = document.getElementById('empty-state');
+            const progressEl = document.getElementById('loading-progress');
+
+            loading.classList.remove('hidden');
+            error.classList.add('hidden');
+            tasksContainer.classList.add('hidden');
+            emptyState.classList.add('hidden');
+            progressEl.textContent = 'Iniciando...';
+        }
+
+        function hideLoading() {
+            const loading = document.getElementById('loading');
+            loading.classList.add('hidden');
+        }
+
+        function showError(message) {
+            const loading = document.getElementById('loading');
+            const error = document.getElementById('error');
+            const errorEl = document.getElementById('error-message');
+
+            loading.classList.add('hidden');
+            error.classList.remove('hidden');
+            errorEl.textContent = message;
+        }
+
+        // Toggle filters
+        function toggleFilters() {
+            const filterContent = document.getElementById('filter-content');
+            const toggleIcon = document.getElementById('filter-toggle-icon');
+            
+            filterContent.classList.toggle('open');
+            
+            if (filterContent.classList.contains('open')) {
+                toggleIcon.classList.remove('rotate-180');
+            } else {
+                toggleIcon.classList.add('rotate-180');
+            }
+        }
+
+        // Switch tab
+        function switchTab(tabName) {
+            // Hide all tab contents
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+
+            // Remove active class from all tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('text-purple-600', 'border-purple-600', 'bg-purple-50');
+                btn.classList.add('text-gray-600', 'border-transparent');
+            });
+
+            // Show selected tab content
+            document.getElementById(`content-${tabName}`).classList.add('active');
+
+            // Add active class to selected tab button
+            const activeBtn = document.getElementById(`tab-${tabName}`);
+            activeBtn.classList.remove('text-gray-600', 'border-transparent');
+            activeBtn.classList.add('text-purple-600', 'border-purple-600', 'bg-purple-50');
+
+            // Render executive metrics if switching to executive tab
+            if (tabName === 'executive' && allTasks.length > 0) {
+                populateWeekFilters();
+                renderExecutiveMetrics();
+            }
+        }
+
+        // Get task type from custom_item_id
+        function getTaskType(customItemId) {
+            if (customItemId === 0) return { type: 'Migração', color: 'bg-blue-100 text-blue-700', icon: 'fa-tasks' };
+            if (customItemId === 1004) return { type: 'Bug', color: 'bg-red-100 text-red-700', icon: 'fa-bug' };
+            if (customItemId === 1005) return { type: 'Melhoria', color: 'bg-green-100 text-green-700', icon: 'fa-arrow-up' };
+            return { type: 'Outro', color: 'bg-gray-100 text-gray-700', icon: 'fa-question' };
+        }
+
+        // Status colors
+        const statusColors = {
+            'backlog bug': 'bg-red-100 text-red-700',
+            'desenv. back': 'bg-blue-100 text-blue-700',
+            'desenv. front': 'bg-green-100 text-green-700',
+            'falta detalhamento': 'bg-yellow-100 text-yellow-700',
+            'gerar massa': 'bg-purple-100 text-purple-700',
+            'default': 'bg-gray-100 text-gray-700'
+        };
+
+        // Status icons
+        const statusIcons = {
+            'backlog': 'fa-inbox',
+            'backlog bug': 'fa-bug',
+            'backlog melhorias': 'fa-arrow-up',
+            'falta detalhamento': 'fa-file-alt',
+            'block': 'fa-ban',
+            'desenv. back': 'fa-code',
+            'ag. desenv front': 'fa-hourglass-half',
+            'desenv. front': 'fa-palette',
+            'deploy': 'fa-cloud-upload-alt',
+            'deploy produção': 'fa-rocket',
+            'qa liax': 'fa-user-check',
+            'em qa': 'fa-search',
+            'ag finalizar bugs': 'fa-wrench',
+            'reteste qa': 'fa-redo',
+            'qa aprovado c/ dependência': 'fa-check-circle',
+            'entregar para homologação': 'fa-handshake',
+            'homologação lello': 'fa-clipboard-check',
+            'aprovado homologação': 'fa-thumbs-up',
+            'programas em produção': 'fa-server',
+            'bugs em produção': 'fa-bug',
+            'gerar massa': 'fa-database',
+            'cancelado': 'fa-times-circle',
+            'complete': 'fa-check-double'
+        };
+
+        // Priority colors
+        const priorityColors = {
+            'urgent': 'bg-red-500',
+            'high': 'bg-orange-500',
+            'normal': 'bg-blue-500',
+            'low': 'bg-green-500',
+            'none': 'bg-gray-300'
+        };
+
+        // Load tasks from API
+        async function loadTasks() {
+            showLoading();
+            await fetchTasks();
+        }
+
+        // Change project
+        function changeProject() {
+            const projectUrl = getCurrentProjectUrl();
+            if (projectUrl && projectUrl !== currentProjectUrl) {
+                loadTasks();
+            }
+        }
+
+        // Update statistics
+        function updateStats() {
+            try {
+                console.log('updateStats iniciado, allTasks.length:', allTasks.length);
+                const totalTasks = allTasks.length;
+                const uniqueStatus = new Set(allTasks.map(t => t.status?.status || 'N/A')).size;
+                const uniqueCreators = new Set(allTasks.map(t => t.creator?.username || 'N/A')).size;
+                const withPriority = allTasks.filter(t => t.priority?.priority).length;
+
+                // Contar por tipo de tarefa
+                const taskCount = allTasks.filter(t => t.custom_item_id === 0).length;
+                const bugCount = allTasks.filter(t => t.custom_item_id === 1004).length;
+                const improvementCount = allTasks.filter(t => t.custom_item_id === 1005).length;
+
+                console.log('Contadores:', { totalTasks, taskCount, bugCount, improvementCount });
+
+                document.getElementById('total-tasks').textContent = totalTasks;
+                document.getElementById('task-count').textContent = taskCount;
+                document.getElementById('bug-count').textContent = bugCount;
+                document.getElementById('improvement-count').textContent = improvementCount;
+                document.getElementById('unique-status').textContent = uniqueStatus;
+
+                console.log('Chamando renderStatusDistribution...');
+                renderStatusDistribution();
+                console.log('Chamando renderPriorityDistribution...');
+                renderPriorityDistribution();
+                console.log('Chamando renderTopCreators...');
+                renderTopCreators();
+                console.log('Chamando renderRecentTasks...');
+                renderRecentTasks();
+                console.log('Chamando renderTypeDistribution...');
+                renderTypeDistribution();
+                console.log('Chamando renderGrouping...');
+                renderGrouping();
+                console.log('Chamando renderStatusTabs...');
+                renderStatusTabs();
+                console.log('Chamando renderProgramDistribution...');
+                renderProgramDistribution();
+                console.log('updateStats concluído');
+            } catch (error) {
+                console.error('Erro ao atualizar estatísticas:', error);
+            }
+        }
+
+        // Render status distribution
+        function renderStatusDistribution() {
+            const statusCounts = {};
+            
+            allTasks.forEach(task => {
+                const status = task.status?.status || 'N/A';
+                statusCounts[status] = (statusCounts[status] || 0) + 1;
+            });
+
+            const container = document.getElementById('status-distribution');
+            const sortedStatuses = Object.entries(statusCounts).sort((a, b) => b[1] - a[1]);
+
+            container.innerHTML = sortedStatuses.map(([status, count]) => {
+                const statusColor = statusColors[status] || statusColors['default'];
+                const percentage = ((count / allTasks.length) * 100).toFixed(1);
+                
+                return `
+                    <div class="bg-gray-50 rounded-lg p-4 hover:bg-gray-100 transition cursor-pointer" onclick="filterByStatus('${status}')">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="status-badge ${statusColor} text-xs">${getDisplayStatus(status)}</span>
+                            <span class="text-gray-500 text-sm">${percentage}%</span>
+                        </div>
+                        <p class="text-2xl font-bold text-gray-800">${count}</p>
+                        <p class="text-gray-500 text-xs">tarefas</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Render priority distribution
+        function renderPriorityDistribution() {
+            const priorityCounts = {};
+            
+            allTasks.forEach(task => {
+                const priority = task.priority?.priority || 'none';
+                priorityCounts[priority] = (priorityCounts[priority] || 0) + 1;
+            });
+
+            const container = document.getElementById('priority-distribution');
+            const priorities = ['urgent', 'high', 'normal', 'low', 'none'];
+            
+            container.innerHTML = priorities.map(priority => {
+                const count = priorityCounts[priority] || 0;
+                const percentage = allTasks.length > 0 ? ((count / allTasks.length) * 100).toFixed(1) : 0;
+                const priorityColor = priorityColors[priority] || priorityColors['none'];
+                const priorityLabel = priority.charAt(0).toUpperCase() + priority.slice(1);
+                
+                return `
+                    <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-3 h-3 rounded-full ${priorityColor}"></span>
+                            <span class="text-sm text-gray-700">${priorityLabel}</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm font-semibold text-gray-800">${count}</span>
+                            <span class="text-xs text-gray-500">${percentage}%</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Render top creators
+        function renderTopCreators() {
+            const creatorCounts = {};
+            
+            allTasks.forEach(task => {
+                const creator = task.creator?.username || 'N/A';
+                if (creator !== 'N/A') {
+                    creatorCounts[creator] = (creatorCounts[creator] || 0) + 1;
+                }
+            });
+
+            const container = document.getElementById('top-creators');
+            const sortedCreators = Object.entries(creatorCounts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+            
+            container.innerHTML = sortedCreators.map(([creator, count], index) => {
+                const percentage = ((count / allTasks.length) * 100).toFixed(1);
+                
+                return `
+                    <div class="flex items-center justify-between p-2 bg-gray-50 rounded">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-6 h-6 rounded-full bg-purple-100 text-purple-600 flex items-center justify-center text-xs font-bold">${index + 1}</span>
+                            <span class="text-sm text-gray-700">${creator}</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="text-sm font-semibold text-gray-800">${count}</span>
+                            <span class="text-xs text-gray-500">${percentage}%</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Render recent tasks
+        function renderRecentTasks() {
+            const container = document.getElementById('recent-tasks');
+            const recentTasks = [...allTasks].sort((a, b) => (b.date_created || 0) - (a.date_created || 0)).slice(0, 5);
+            
+            container.innerHTML = recentTasks.map(task => {
+                const taskType = getTaskType(task.custom_item_id);
+                const date = formatDate(task.date_created);
+                
+                return `
+                    <div class="p-2 bg-gray-50 rounded hover:bg-gray-100 transition cursor-pointer" onclick="switchTab('tasks')">
+                        <div class="flex items-center space-x-2">
+                            <span class="status-badge ${taskType.color} text-xs">${taskType.type}</span>
+                            <span class="text-sm text-gray-700 truncate flex-1">${task.name || 'Sem nome'}</span>
+                        </div>
+                        <div class="text-xs text-gray-500 mt-1">${date}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Render type distribution
+        function renderTypeDistribution() {
+            const typeCounts = {
+                'Migração': allTasks.filter(t => t.custom_item_id === 0).length,
+                'Bug': allTasks.filter(t => t.custom_item_id === 1004).length,
+                'Melhoria': allTasks.filter(t => t.custom_item_id === 1005).length
+            };
+
+            const container = document.getElementById('type-distribution');
+            const total = allTasks.length;
+            
+            container.innerHTML = Object.entries(typeCounts).map(([type, count]) => {
+                const percentage = total > 0 ? ((count / total) * 100).toFixed(1) : 0;
+                const taskType = type === 'Migração' ? { color: 'bg-blue-500', icon: 'fa-tasks' } :
+                                 type === 'Bug' ? { color: 'bg-red-500', icon: 'fa-bug' } :
+                                 { color: 'bg-green-500', icon: 'fa-arrow-up' };
+                
+                return `
+                    <div class="space-y-2">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-2">
+                                <i class="fas ${taskType.icon} text-gray-600"></i>
+                                <span class="text-sm text-gray-700">${type}</span>
+                            </div>
+                            <span class="text-sm font-semibold text-gray-800">${count}</span>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="${taskType.color} h-2 rounded-full transition-all duration-300" style="width: ${percentage}%"></div>
+                        </div>
+                        <div class="text-xs text-gray-500 text-right">${percentage}%</div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Switch status sub-tab
+        function switchStatusTab(tabName) {
+            // Hide all status content
+            document.querySelectorAll('.status-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            
+            // Remove active class from all status tab buttons
+            document.querySelectorAll('.status-tab-btn').forEach(btn => {
+                btn.classList.remove('text-purple-600', 'border-purple-600', 'bg-purple-50');
+                btn.classList.add('text-gray-600', 'border-transparent');
+            });
+            
+            // Show selected status content
+            document.getElementById(`status-content-${tabName}`).classList.remove('hidden');
+            
+            // Add active class to selected status tab button
+            const activeBtn = document.getElementById(`status-tab-${tabName}`);
+            activeBtn.classList.remove('text-gray-600', 'border-transparent');
+            activeBtn.classList.add('text-purple-600', 'border-purple-600', 'bg-purple-50');
+        }
+
+        // Mapeamento de nomes de exibição para status (nome real do ClickUp -> nome exibido na tela)
+        const statusDisplayNames = {
+            'backlog': 'Backlog',
+            'backlog bug': 'Backlog Bug',
+            'backlog melhorias': 'Backlog Melhorias',
+            'falta detalhamento': 'Falta Detalhamento',
+            'block': 'Bloqueado',
+            'desenv. back': 'Desenvolvimento Backend',
+            'ag. desenv front': 'Aguardando Desenvolvimento Frontend',
+            'desenv. front': 'Desenvolvimento Frontend',
+            'deploy': 'Deploy',
+            'qa liax': 'QA Liax',
+            'em qa': 'Em QA',
+            'ag finalizar bugs': 'Aguardando Finalizar Bugs',
+            'reteste qa': 'Reteste QA',
+            'qa aprovado c/ dependência': 'QA Aprovado com Dependência',
+            'entregar para homologação': 'Entregar para Homologação',
+            'homologação lello': 'Homologação Lello',
+            'aprovado homologação': 'Aprovado Homologação',
+            'programas em produção': 'Programas em Produção',
+            'bugs em produção': 'Bugs em Produção',
+            'gerar massa': 'Gerar Massa',
+            'cancelado': 'Cancelado',
+            'complete': 'Concluído'
+        };
+
+        // Obter nome de exibição do status
+        function getDisplayStatus(status) {
+            return statusDisplayNames[status] || capitalizeStatus(status);
+        }
+
+        // Capitalize first letter of each word (fallback)
+        function capitalizeStatus(status) {
+            return status.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+        }
+
+        // Render status tabs (todos os status organizados por tipo e grupo)
+        function renderStatusTabs() {
+            try {
+                console.log('renderStatusTabs iniciado, allTasks.length:', allTasks.length);
+                // Mapear custom_item_id para tipo
+                const typeMapping = {
+                    0: 'migrations',
+                    1005: 'improvements',
+                    1004: 'bugs'
+                };
+
+                // Status principais para destacar na aba Migrações
+                const priorityStatuses = ['homologação lello', 'deploy produção', 'programas em produção', 'prog. em prod c/ bug', 'prog. prod. aprovados', 'programas cancelados  prod'];
+                const blockStatus = 'block';
+
+                // Renderizar cada tipo usando os nomes corretos (migrations, improvements, bugs)
+                Object.values(typeMapping).forEach(type => {
+                    console.log('Renderizando tipo:', type);
+                    const container = document.getElementById(`status-content-${type}`);
+                    if (!container) {
+                        console.error('Container não encontrado:', `status-content-${type}`);
+                        return;
+                    }
+
+                    const typeId = Object.keys(typeMapping).find(key => typeMapping[key] === type);
+
+                    // Filtrar tarefas deste tipo
+                    const tasksByType = allTasks.filter(t => t.custom_item_id === parseInt(typeId));
+                    console.log('Tarefas do tipo', type, ':', tasksByType.length);
+
+                    // Extrair todos os status únicos com seus orderindex
+                    const statusMap = {};
+                    tasksByType.forEach(task => {
+                        const status = task.status;
+                        if (status) {
+                            const statusName = status.status || 'N/A';
+                            const orderindex = status.orderindex || 9999;
+                            if (!statusMap[statusName]) {
+                                statusMap[statusName] = {
+                                    orderindex: orderindex,
+                                    count: 0
+                                };
+                            }
+                            statusMap[statusName].count++;
+                        }
+                    });
+
+                    console.log('Status encontrados para', type, ':', Object.keys(statusMap));
+
+                    // Ordenar status por orderindex
+                    const sortedStatuses = Object.entries(statusMap)
+                        .sort((a, b) => a[1].orderindex - b[1].orderindex)
+                        .map(([status, data]) => ({ status, ...data }));
+
+                    // Separar status principais, block e outros
+                    const priorityStatusesFiltered = sortedStatuses.filter(s => priorityStatuses.includes(s.status));
+                    const blockStatusFiltered = sortedStatuses.filter(s => s.status === blockStatus);
+                    const otherStatuses = sortedStatuses.filter(s => !priorityStatuses.includes(s.status) && s.status !== blockStatus);
+
+                    console.log('Status filtrados - priority:', priorityStatusesFiltered.length, 'block:', blockStatusFiltered.length, 'outros:', otherStatuses.length);
+
+                    let html = '';
+
+                    // Se for migrações, mostrar status principais em destaque no topo
+                    if (type === 'migrations' && priorityStatusesFiltered.length > 0) {
+                        html += `
+                            <div class="mb-8 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl p-6">
+                                <h3 class="text-lg font-bold text-gray-800 mb-4">
+                                    <i class="fas fa-star text-yellow-500 mr-2"></i>Status Principais
+                                </h3>
+                                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        `;
+
+                        priorityStatusesFiltered.forEach(({ status, count }) => {
+                            if (count === 0) return;
+
+                            const displayStatus = getDisplayStatus(status);
+                            const statusColor = statusColors[status.toLowerCase()] || statusColors['default'];
+
+                            html += `
+                                <div class="bg-white rounded-xl shadow-md p-4 hover:shadow-lg transition cursor-pointer ring-2 ring-purple-300" onclick="switchTab('tasks'); filterByStatus('${status}')">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-2">
+                                            <span class="status-badge ${statusColor} text-xs">${displayStatus}</span>
+                                            <i class="fas fa-star text-yellow-500"></i>
+                                        </div>
+                                        <span class="text-3xl font-bold text-gray-800">${count}</span>
+                                    </div>
+                                </div>
+                            `;
+                        });
+
+                        html += `
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // Mostrar seção Block se houver
+                    if (blockStatusFiltered.length > 0) {
+                        html += `
+                            <div class="mb-8 bg-red-50 border-2 border-red-300 rounded-xl p-6">
+                                <h3 class="text-lg font-bold text-red-700 mb-4">
+                                    <i class="fas fa-ban text-red-500 mr-2"></i>Block
+                                </h3>
+                                <div class="flex flex-wrap items-center gap-2">
+                        `;
+
+                        blockStatusFiltered.forEach(({ status, count }) => {
+                            const displayStatus = getDisplayStatus(status);
+                            const statusColor = statusColors[status.toLowerCase()] || statusColors['default'];
+                            const statusIcon = statusIcons[status.toLowerCase()] || 'fa-circle';
+
+                            html += `
+                                <div class="bg-white rounded-xl shadow-md p-4 hover:shadow-lg transition cursor-pointer flex-shrink-0" onclick="switchTab('tasks'); filterByStatus('${status}')">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-2">
+                                            <i class="fas ${statusIcon} text-gray-400 text-xs"></i>
+                                            <span class="status-badge ${statusColor} text-xs">${displayStatus}</span>
+                                        </div>
+                                        <span class="text-2xl font-bold text-gray-800">${count}</span>
+                                    </div>
+                                </div>
+                            `;
+                        });
+
+                        html += `
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    // Mostrar outros status em ordem
+                    if (otherStatuses.length > 0) {
+                        html += `
+                            <div class="mb-8">
+                                <h3 class="text-lg font-bold text-gray-800 mb-4">Todos os Status</h3>
+                                <div class="flex flex-wrap items-center gap-2">
+                        `;
+
+                        otherStatuses.forEach(({ status, count }, index) => {
+                            const displayStatus = getDisplayStatus(status);
+                            const statusColor = statusColors[status.toLowerCase()] || statusColors['default'];
+                            const statusIcon = statusIcons[status.toLowerCase()] || 'fa-circle';
+
+                            html += `
+                                <div class="bg-white rounded-xl shadow-md p-4 hover:shadow-lg transition cursor-pointer flex-shrink-0" onclick="switchTab('tasks'); filterByStatus('${status}')">
+                                    <div class="flex items-center justify-between">
+                                        <div class="flex items-center space-x-2">
+                                            <i class="fas ${statusIcon} text-gray-400 text-xs"></i>
+                                            <span class="status-badge ${statusColor} text-xs">${displayStatus}</span>
+                                        </div>
+                                        <span class="text-2xl font-bold text-gray-800">${count}</span>
+                                    </div>
+                                </div>
+                            `;
+
+                            // Adicionar seta entre status (exceto no último)
+                            if (index < otherStatuses.length - 1) {
+                                html += `
+                                    <i class="fas fa-arrow-right text-gray-400 text-xl"></i>
+                                `;
+                            }
+                        });
+
+                        html += `
+                                </div>
+                            </div>
+                        `;
+                    }
+
+                    if (html === '') {
+                        html = '<p class="text-gray-500 text-center py-8">Nenhuma tarefa encontrada</p>';
+                    }
+
+                    console.log('HTML gerado para', type, ':', html.length, 'caracteres');
+                    container.innerHTML = html;
+                });
+                console.log('renderStatusTabs concluído');
+            } catch (error) {
+                console.error('Erro ao renderizar status tabs:', error);
+            }
+        }
+
+        // Filter by status (click on status card)
+        function filterByStatus(status) {
+            const statusFilter = document.getElementById('status-filter');
+            statusFilter.value = status;
+            filterTasks();
+        }
+
+        // Render program distribution (bugs grouped by program)
+        function renderProgramDistribution() {
+            const container = document.getElementById('program-container');
+            const emptyState = document.getElementById('program-empty-state');
+
+            // Filter only bugs
+            const bugs = allTasks.filter(t => t.custom_item_id === 1004);
+
+            if (bugs.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                document.getElementById('avg-bugs-per-program').textContent = '0';
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+
+            // Get program field options to map orderindex to name
+            let programOptions = {};
+            for (const bug of bugs) {
+                const programField = bug.custom_fields?.find(cf => cf.name === '💻 Programa');
+                if (programField && programField.type_config && programField.type_config.options) {
+                    programField.type_config.options.forEach(opt => {
+                        programOptions[opt.orderindex] = opt.name;
+                    });
+                    break;
+                }
+            }
+
+            // Group by program with bug type classification
+            const programData = {};
+            bugs.forEach(bug => {
+                const programField = bug.custom_fields?.find(cf => cf.name === '💻 Programa');
+                const programValue = programField?.value;
+                const programName = programValue ? (programOptions[programValue] || programValue) : 'Sem programa';
+                
+                if (!programData[programName]) {
+                    programData[programName] = { qa: 0, producao: 0, homologacao: 0, total: 0 };
+                }
+                
+                // Classify bug type based on tags
+                const tags = bug.tags || [];
+                const tagNames = tags.map(t => t.name?.toLowerCase() || '');
+                
+                if (tagNames.includes('produção')) {
+                    programData[programName].producao++;
+                } else if (tagNames.includes('homologação')) {
+                    programData[programName].homologacao++;
+                } else {
+                    programData[programName].qa++;
+                }
+                
+                programData[programName].total++;
+            });
+
+            // Sort by total count (descending)
+            const sortedPrograms = Object.entries(programData).sort((a, b) => b[1].total - a[1].total);
+
+            // Calculate and display average bugs per program
+            const programCount = sortedPrograms.length;
+            const avgBugsPerProgram = programCount > 0 ? (bugs.length / programCount).toFixed(1) : 0;
+            document.getElementById('avg-bugs-per-program').textContent = avgBugsPerProgram;
+
+            // Render program cards
+            container.innerHTML = sortedPrograms.map(([program, data]) => {
+                const percentage = ((data.total / bugs.length) * 100).toFixed(1);
+                return `
+                    <div class="bg-white rounded-xl shadow-md p-6 hover:shadow-lg transition cursor-pointer" onclick="filterByProgram('${program}')">
+                        <div class="flex items-center justify-between mb-3">
+                            <div class="flex items-center space-x-2">
+                                <i class="fas fa-laptop-code text-purple-600"></i>
+                                <h3 class="font-semibold text-gray-800">${program}</h3>
+                            </div>
+                            <span class="text-gray-500 text-sm">${percentage}%</span>
+                        </div>
+                        <p class="text-3xl font-bold text-purple-600">${data.total}</p>
+                        <p class="text-gray-500 text-sm mt-1">bugs totais</p>
+                        
+                        <!-- Bug type breakdown -->
+                        <div class="mt-4 pt-4 border-t border-gray-200 grid grid-cols-3 gap-2 text-center">
+                            <div>
+                                <p class="text-lg font-bold text-blue-600">${data.qa}</p>
+                                <p class="text-xs text-gray-500">QA</p>
+                            </div>
+                            <div>
+                                <p class="text-lg font-bold text-red-600">${data.producao}</p>
+                                <p class="text-xs text-gray-500">Produção</p>
+                            </div>
+                            <div>
+                                <p class="text-lg font-bold text-orange-600">${data.homologacao}</p>
+                                <p class="text-xs text-gray-500">Homologação</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Filter by program (click on program card)
+        function filterByProgram(program) {
+            // Switch to tasks tab
+            switchTab('tasks');
+
+            // Find the program field ID from any task
+            let programFieldId = null;
+            for (const task of allTasks) {
+                const programField = task.custom_fields?.find(cf => cf.name === '💻 Programa');
+                if (programField) {
+                    programFieldId = programField.id;
+                    break;
+                }
+            }
+
+            // Set filter to bugs only
+            const typeFilter = document.getElementById('type-filter');
+            typeFilter.value = '1004';
+
+            // Set custom field filter if program field ID was found
+            if (programFieldId) {
+                const customFieldFilter = document.getElementById('custom-field-filter');
+                const customFieldValue = document.getElementById('custom-field-value');
+                customFieldFilter.value = programFieldId;
+                customFieldValue.value = program;
+            }
+
+            // Trigger filter
+            filterTasks();
+        }
+
+        // Populate filter dropdowns
+        function populateFilters() {
+            const statuses = [...new Set(allTasks.map(t => t.status?.status || 'N/A'))].sort();
+            const statusFilter = document.getElementById('status-filter');
+
+            if (statusFilter) {
+                statusFilter.innerHTML = '<option value="">Todos os Status</option>';
+                statuses.forEach(status => {
+                    if (status !== 'N/A') {
+                        const option = document.createElement('option');
+                        option.value = status;
+                        option.textContent = getDisplayStatus(status);
+                        statusFilter.appendChild(option);
+                    }
+                });
+            }
+
+            // Populate assignee filter
+            const assignees = [...new Set(allTasks.map(t => {
+                const assigneeList = t.assignees || [];
+                return assigneeList.length > 0 ? assigneeList.map(a => a.username).join(', ') : 'N/A';
+            }))].sort();
+            const assigneeFilter = document.getElementById('assignee-filter');
+            
+            if (assigneeFilter) {
+                assigneeFilter.innerHTML = '<option value="">Todos os Responsáveis</option>';
+                assignees.forEach(assignee => {
+                    if (assignee !== 'N/A') {
+                        const option = document.createElement('option');
+                        option.value = assignee;
+                        option.textContent = assignee;
+                        assigneeFilter.appendChild(option);
+                    }
+                });
+            }
+        }
+
+        // Filter tasks
+        function filterTasks() {
+            const searchTerm = document.getElementById('search-input').value.toLowerCase();
+            const statusFilter = document.getElementById('status-filter').value;
+            const typeFilter = document.getElementById('type-filter').value;
+            const priorityFilter = document.getElementById('priority-filter').value;
+            const assigneeFilter = document.getElementById('assignee-filter').value;
+            const dateFilter = document.getElementById('date-filter').value;
+            const dateFrom = document.getElementById('date-from').value;
+            const dateTo = document.getElementById('date-to').value;
+            const timeFilter = document.getElementById('time-filter').value;
+            const timeMin = document.getElementById('time-min').value;
+            const timeMax = document.getElementById('time-max').value;
+            const customFieldFilter = document.getElementById('custom-field-filter').value;
+            const customFieldValue = document.getElementById('custom-field-value').value;
+
+            filteredTasks = allTasks.filter(task => {
+                const name = (task.name || '').toLowerCase();
+                const status = task.status?.status || 'N/A';
+                const customItemId = task.custom_item_id;
+                const priority = task.priority?.priority;
+                const assigneeList = task.assignees || [];
+                const assigneeStr = assigneeList.length > 0 ? assigneeList.map(a => a.username).join(', ') : 'N/A';
+
+                const matchesSearch = name.includes(searchTerm);
+                const matchesStatus = !statusFilter || status === statusFilter;
+                const matchesType = !typeFilter || customItemId === parseInt(typeFilter);
+                const matchesPriority = !priorityFilter || priority === priorityFilter;
+                const matchesAssignee = !assigneeFilter || assigneeStr === assigneeFilter;
+
+                // Date filter
+                let matchesDate = true;
+                if (dateFilter && dateFrom) {
+                    const taskDate = task[dateFilter];
+                    if (taskDate) {
+                        const taskDateObj = new Date(parseInt(taskDate));
+                        const fromDateObj = new Date(dateFrom);
+                        matchesDate = taskDateObj >= fromDateObj;
+                    } else {
+                        matchesDate = false;
+                    }
+                }
+                if (dateFilter && dateTo) {
+                    const taskDate = task[dateFilter];
+                    if (taskDate) {
+                        const taskDateObj = new Date(parseInt(taskDate));
+                        const toDateObj = new Date(dateTo);
+                        matchesDate = matchesDate && taskDateObj <= toDateObj;
+                    } else {
+                        matchesDate = false;
+                    }
+                }
+
+                // Time filter
+                let matchesTime = true;
+                if (timeFilter) {
+                    const timeValue = timeFilter === 'spent' ? task.time_spent : task.time_estimate;
+                    if (timeValue) {
+                        const timeMinutes = parseInt(timeValue) / 60000; // Convert milliseconds to minutes
+                        if (timeMin) matchesTime = timeMinutes >= parseInt(timeMin);
+                        if (timeMax) matchesTime = matchesTime && timeMinutes <= parseInt(timeMax);
+                    } else {
+                        matchesTime = false;
+                    }
+                }
+
+                // Custom field filter
+                let matchesCustomField = true;
+                if (customFieldFilter && customFieldValue) {
+                    const customField = task.custom_fields?.find(cf => cf.id === customFieldFilter);
+                    if (customField) {
+                        const fieldValue = customField.value?.toString().toLowerCase() || '';
+                        matchesCustomField = fieldValue.includes(customFieldValue.toLowerCase());
+                    } else {
+                        matchesCustomField = false;
+                    }
+                }
+
+                return matchesSearch && matchesStatus && matchesType && matchesPriority && matchesAssignee && matchesDate && matchesTime && matchesCustomField;
+            });
+
+            renderTasks();
+        }
+
+        // Render grouping
+        function renderGrouping() {
+            const groupBy = document.getElementById('group-by').value;
+            const container = document.getElementById('grouping-results');
+            
+            const groups = {};
+            
+            allTasks.forEach(task => {
+                let key;
+                switch(groupBy) {
+                    case 'status':
+                        key = task.status?.status || 'N/A';
+                        break;
+                    case 'assignee':
+                        const assigneeList = task.assignees || [];
+                        key = assigneeList.length > 0 ? assigneeList.map(a => a.username).join(', ') : 'N/A';
+                        break;
+                    case 'priority':
+                        key = task.priority?.priority || 'none';
+                        break;
+                    case 'type':
+                        key = getTaskType(task.custom_item_id).type;
+                        break;
+                    case 'due_date':
+                        key = task.due_date ? formatDate(task.due_date) : 'N/A';
+                        break;
+                    case 'start_date':
+                        key = task.start_date ? formatDate(task.start_date) : 'N/A';
+                        break;
+                    default:
+                        key = 'N/A';
+                }
+                
+                if (!groups[key]) groups[key] = [];
+                groups[key].push(task);
+            });
+
+            container.innerHTML = Object.entries(groups).map(([key, tasks]) => {
+                const percentage = ((tasks.length / allTasks.length) * 100).toFixed(1);
+                
+                return `
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="font-semibold text-gray-800">${key}</h3>
+                            <div class="flex items-center space-x-2">
+                                <span class="text-sm font-bold text-gray-800">${tasks.length}</span>
+                                <span class="text-xs text-gray-500">${percentage}%</span>
+                            </div>
+                        </div>
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="bg-purple-500 h-2 rounded-full transition-all duration-300" style="width: ${percentage}%"></div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Toggle accordion
+        function toggleAccordion(taskId) {
+            const content = document.getElementById(`accordion-${taskId}`);
+            const icon = document.getElementById(`icon-${taskId}`);
+            
+            content.classList.toggle('open');
+            icon.classList.toggle('rotate-180');
+        }
+
+        // Render tasks
+        function renderTasks() {
+            console.log('renderTasks chamado, filteredTasks.length:', filteredTasks.length);
+            const container = document.getElementById('tasks-container');
+            const emptyState = document.getElementById('empty-state');
+
+            if (!container) {
+                console.error('Container tasks-container não encontrado');
+                return;
+            }
+
+            if (filteredTasks.length === 0) {
+                container.classList.add('hidden');
+                emptyState.classList.remove('hidden');
+                console.log('Nenhuma tarefa para exibir');
+                return;
+            }
+
+            container.classList.remove('hidden');
+            emptyState.classList.add('hidden');
+            console.log('Renderizando', filteredTasks.length, 'tarefas');
+
+            container.innerHTML = filteredTasks.map((task, index) => {
+                const status = task.status?.status || 'N/A';
+                const statusColor = statusColors[status] || statusColors['default'];
+                const creator = task.creator?.username || 'N/A';
+                const priority = task.priority?.priority;
+                const priorityColor = priorityColors[priority] || priorityColors['none'];
+                const priorityLabel = priority ? priority.charAt(0).toUpperCase() + priority.slice(1) : 'N/A';
+                const customItemId = task.custom_item_id;
+                const taskType = getTaskType(customItemId);
+                const taskId = task.id || index;
+
+                return `
+                    <div class="bg-white rounded-xl shadow-md overflow-hidden fade-in" style="animation-delay: ${index * 0.05}s">
+                        <div class="p-4 cursor-pointer hover:bg-gray-50 transition" onclick="toggleAccordion('${taskId}')">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3 flex-1">
+                                    <i id="icon-${taskId}" class="fas fa-chevron-down text-gray-400 transition-transform duration-300"></i>
+                                    <span class="status-badge ${taskType.color} text-xs"><i class="fas ${taskType.icon} mr-1"></i>${taskType.type}</span>
+                                    <span class="status-badge ${statusColor} text-xs">${getDisplayStatus(status)}</span>
+                                    <h3 class="font-semibold text-gray-800 truncate flex-1">${task.name || 'Sem nome'}</h3>
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    ${priority ? `<span class="w-3 h-3 rounded-full ${priorityColor}" title="Prioridade: ${priorityLabel}"></span>` : ''}
+                                    <span class="text-xs text-gray-500">${formatDate(task.date_created)}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="accordion-${taskId}" class="accordion-content">
+                            <div class="p-4 border-t border-gray-200 bg-gray-50">
+                                <div class="grid grid-cols-2 gap-4 text-sm mb-4">
+                                    <div>
+                                        <span class="text-gray-500">ID:</span>
+                                        <span class="font-mono text-gray-800 ml-2">${task.id || 'N/A'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Criador:</span>
+                                        <span class="text-gray-800 ml-2">${creator}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Prioridade:</span>
+                                        <span class="text-gray-800 ml-2">${priorityLabel}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Responsável:</span>
+                                        <span class="text-gray-800 ml-2">${task.assignees && task.assignees.length > 0 ? task.assignees.map(a => a.username).join(', ') : 'N/A'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Data de Criação:</span>
+                                        <span class="text-gray-800 ml-2">${formatDate(task.date_created)}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Data de Vencimento:</span>
+                                        <span class="text-gray-800 ml-2">${formatDate(task.due_date)}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Tempo Gasto:</span>
+                                        <span class="text-gray-800 ml-2">${task.time_spent ? (parseInt(task.time_spent) / 60000).toFixed(0) + ' min' : 'N/A'}</span>
+                                    </div>
+                                    <div>
+                                        <span class="text-gray-500">Estimativa:</span>
+                                        <span class="text-gray-800 ml-2">${task.time_estimate ? (parseInt(task.time_estimate) / 60000).toFixed(0) + ' min' : 'N/A'}</span>
+                                    </div>
+                                </div>
+                                ${task.description ? `
+                                    <div class="mb-4">
+                                        <span class="text-gray-500 text-sm">Descrição:</span>
+                                        <p class="text-gray-800 mt-1">${task.description || 'Sem descrição'}</p>
+                                    </div>
+                                ` : ''}
+                                ${task.custom_fields && task.custom_fields.length > 0 ? `
+                                    <div>
+                                        <span class="text-gray-500 text-sm font-semibold">Campos Personalizados:</span>
+                                        <div class="mt-2 space-y-2">
+                                            ${task.custom_fields.map(cf => {
+                                                const customFieldNames = {
+                                                    '67d33bf2-ed75-4164-baaf-5318e883d137': 'Quantidade de Linhas',
+                                                    '67db9e6f-e73a-4f76-9195-b81a5a57e728': 'Prioridade',
+                                                    '90b50000-51a5-4337-b412-0098005978fb': 'Ordem de Atendimento',
+                                                    '63d99c5a-51ae-4ee2-a9cd-9e6878934e62': 'Bugs em Aberto',
+                                                    '4d3c26a5-4e09-403b-a0d6-26bdf286c013': 'Bugs Totais'
+                                                };
+                                                const fieldName = customFieldNames[cf.id] || cf.name || 'Campo';
+                                                const value = cf.value !== undefined && cf.value !== null ? cf.value : 'N/A';
+                                                return `
+                                                    <div class="flex items-center justify-between p-2 bg-white rounded border border-gray-200">
+                                                        <span class="text-sm text-gray-600">${fieldName}:</span>
+                                                        <span class="text-sm font-semibold text-gray-800">${value}</span>
+                                                    </div>
+                                                `;
+                                            }).join('')}
+                                        </div>
+                                    </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Format date
+        function formatDate(timestamp) {
+            if (!timestamp) return 'N/A';
+            const date = new Date(parseInt(timestamp));
+            return date.toLocaleDateString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric'
+            });
+        }
+
+        // ==================== EXECUTIVE METRICS FUNCTIONS ====================
+
+        // Classify collaborator as QA or Developer
+        function getCollaboratorType(username) {
+            const qaMembers = ['Thiago', 'Ana Keila', 'Juliana Oliveira', 'Pedro Samuel', 'Cristian'];
+            return qaMembers.some(qa => username.includes(qa)) ? 'QA' : 'Desenvolvimento';
+        }
+
+        // Get all available weeks from tasks
+        function getAllAvailableWeeks() {
+            const weeks = new Set();
+            allTasks.forEach(task => {
+                if (task.date_created) {
+                    const date = new Date(parseInt(task.date_created));
+                    weeks.add(getWeekKey(date));
+                }
+                if (task.date_updated) {
+                    const date = new Date(parseInt(task.date_updated));
+                    weeks.add(getWeekKey(date));
+                }
+                if (task.date_done) {
+                    const date = new Date(parseInt(task.date_done));
+                    weeks.add(getWeekKey(date));
+                }
+            });
+            return Array.from(weeks).sort();
+        }
+
+        // Populate week filter selects
+        function populateWeekFilters() {
+            const weekStart = document.getElementById('week-start');
+            const weekEnd = document.getElementById('week-end');
+            if (!weekStart || !weekEnd) return;
+
+            availableWeeks = getAllAvailableWeeks();
+            
+            // Clear existing options except the first one
+            weekStart.innerHTML = '<option value="">Todas as semanas</option>';
+            weekEnd.innerHTML = '<option value="">Todas as semanas</option>';
+            
+            availableWeeks.forEach(week => {
+                weekStart.innerHTML += `<option value="${week}">${week}</option>`;
+                weekEnd.innerHTML += `<option value="${week}">${week}</option>`;
+            });
+        }
+
+        // Apply week filter
+        function applyWeekFilter() {
+            const weekStart = document.getElementById('week-start');
+            const weekEnd = document.getElementById('week-end');
+            
+            weekFilter.start = weekStart.value;
+            weekFilter.end = weekEnd.value;
+            
+            renderExecutiveMetrics();
+        }
+
+        // Reset week filter
+        function resetWeekFilter() {
+            weekFilter.start = '';
+            weekFilter.end = '';
+            
+            document.getElementById('week-start').value = '';
+            document.getElementById('week-end').value = '';
+            
+            renderExecutiveMetrics();
+        }
+
+        // Check if a week is within the filter range
+        function isWeekInFilter(weekKey) {
+            if (!weekFilter.start && !weekFilter.end) return true;
+            
+            if (weekFilter.start && weekFilter.end) {
+                return weekKey >= weekFilter.start && weekKey <= weekFilter.end;
+            }
+            
+            if (weekFilter.start) {
+                return weekKey >= weekFilter.start;
+            }
+            
+            if (weekFilter.end) {
+                return weekKey <= weekFilter.end;
+            }
+            
+            return true;
+        }
+
+        // Check if migration has homologation or QA bugs
+        function hasHomologationOrQABugs(task) {
+            // Check custom fields for bug counts
+            if (task.custom_fields) {
+                const bugsEmAberto = task.custom_fields.find(cf => cf.id === '63d99c5a-51ae-4ee2-a9cd-9e6878934e62');
+                const bugsTotais = task.custom_fields.find(cf => cf.id === '4d3c26a5-4e09-403b-a0d6-26bdf286c013');
+                
+                if (bugsEmAberto && bugsEmAberto.value > 0) return true;
+                if (bugsTotais && bugsTotais.value > 0) return true;
+            }
+            return false;
+        }
+
+        // Check if migration is considered completed (in Homologation without bugs)
+        function isMigrationCompleted(task) {
+            const status = task.status?.status?.toLowerCase() || '';
+            const isHomologation = status.includes('homolog');
+            const hasBugs = hasHomologationOrQABugs(task);
+            return isHomologation && !hasBugs;
+        }
+
+        // Calculate migrations per week
+        function calculateMigrationsPerWeek() {
+            const migrations = allTasks.filter(t => t.custom_item_id === 0 && isMigrationCompleted(t));
+            const weeks = {};
+            
+            migrations.forEach(task => {
+                // Use date_updated when entering homologation
+                if (task.date_updated) {
+                    const date = new Date(parseInt(task.date_updated));
+                    const weekKey = getWeekKey(date);
+                    if (isWeekInFilter(weekKey)) {
+                        weeks[weekKey] = (weeks[weekKey] || 0) + 1;
+                    }
+                }
+            });
+            
+            return weeks;
+        }
+
+        // Get week key in format "YYYY-WW"
+        function getWeekKey(date) {
+            const year = date.getFullYear();
+            const week = getWeekNumber(date);
+            return `${year}-W${week.toString().padStart(2, '0')}`;
+        }
+
+        // Get ISO week number
+        function getWeekNumber(date) {
+            const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+            const dayNum = d.getUTCDay() || 7;
+            d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+            const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+            return Math.ceil((((d - yearStart) / 86400000) + 1) / 7);
+        }
+
+        // Render migrations per week chart
+        function renderMigrationsPerWeek() {
+            const canvas = document.getElementById('migrations-per-week-chart');
+            if (!canvas) return;
+
+            // Destruir gráfico anterior se existir
+            if (chartInstances['migrationsPerWeek']) {
+                chartInstances['migrationsPerWeek'].destroy();
+            }
+
+            const weeks = calculateMigrationsPerWeek();
+            const sortedWeeks = Object.entries(weeks).sort();
+            const labels = sortedWeeks.map(([week]) => week);
+            const data = sortedWeeks.map(([, count]) => count);
+
+            const ctx = canvas.getContext('2d');
+            chartInstances['migrationsPerWeek'] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Migrações Concluídas',
+                        data: data,
+                        borderColor: 'rgb(59, 130, 246)',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.1,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Calculate average migration time
+        function calculateMigrationTime() {
+            const migrations = allTasks.filter(t => t.custom_item_id === 0 && isMigrationCompleted(t) && t.date_created && t.date_updated);
+            const times = migrations.map(task => {
+                const created = parseInt(task.date_created);
+                const updated = parseInt(task.date_updated); // Use date_updated when entering homologation
+                return (updated - created) / (1000 * 60 * 60 * 24); // Convert to days
+            });
+            
+            if (times.length === 0) return null;
+            
+            return {
+                average: times.reduce((a, b) => a + b, 0) / times.length,
+                fastest: Math.min(...times),
+                slowest: Math.max(...times)
+            };
+        }
+
+        // Render migration time metrics
+        function renderMigrationTime() {
+            const avgElement = document.getElementById('avg-migration-time');
+            const fastestElement = document.getElementById('fastest-migration');
+            const slowestElement = document.getElementById('slowest-migration');
+            
+            const timeData = calculateMigrationTime();
+            
+            if (!timeData) {
+                avgElement.textContent = '-';
+                fastestElement.textContent = '-';
+                slowestElement.textContent = '-';
+                return;
+            }
+            
+            avgElement.textContent = `${timeData.average.toFixed(1)} dias`;
+            fastestElement.textContent = `${timeData.fastest.toFixed(1)} dias`;
+            slowestElement.textContent = `${timeData.slowest.toFixed(1)} dias`;
+        }
+
+        // Calculate migrations by status
+        function calculateMigrationsByStatus() {
+            const migrations = allTasks.filter(t => t.custom_item_id === 0);
+            const statusCounts = {};
+            
+            migrations.forEach(task => {
+                const status = task.status?.status || 'N/A';
+                statusCounts[status] = (statusCounts[status] || 0) + 1;
+            });
+            
+            return statusCounts;
+        }
+
+        // Render migrations by status chart
+        function renderMigrationsByStatus() {
+            const canvas = document.getElementById('migrations-by-status-chart');
+            if (!canvas) return;
+
+            // Destruir gráfico anterior se existir
+            if (chartInstances['migrationsByStatus']) {
+                chartInstances['migrationsByStatus'].destroy();
+            }
+
+            const statusCounts = calculateMigrationsByStatus();
+            const sortedStatuses = Object.entries(statusCounts).sort((a, b) => b[1] - a[1]);
+
+            if (sortedStatuses.length === 0) {
+                return;
+            }
+
+            const labels = sortedStatuses.map(([status]) => status);
+            const data = sortedStatuses.map(([, count]) => count);
+            const colors = [
+                'rgb(59, 130, 246)',
+                'rgb(16, 185, 129)',
+                'rgb(245, 158, 11)',
+                'rgb(239, 68, 68)',
+                'rgb(139, 92, 246)',
+                'rgb(236, 72, 153)',
+                'rgb(20, 184, 166)',
+                'rgb(249, 115, 22)'
+            ];
+
+            const ctx = canvas.getContext('2d');
+            chartInstances['migrationsByStatus'] = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: data,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 2,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: {
+                                boxWidth: 12,
+                                padding: 10
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Calculate tasks completed per week
+        function calculateTasksCompletedPerWeek() {
+            const completedTasks = allTasks.filter(t => t.date_done);
+            const weeks = {};
+            
+            completedTasks.forEach(task => {
+                const date = new Date(parseInt(task.date_done));
+                const weekKey = getWeekKey(date);
+                if (isWeekInFilter(weekKey)) {
+                    weeks[weekKey] = (weeks[weekKey] || 0) + 1;
+                }
+            });
+            
+            return weeks;
+        }
+
+        // Render tasks completed per week chart
+        function renderTasksCompletedPerWeek() {
+            const canvas = document.getElementById('tasks-completed-per-week-chart');
+            if (!canvas) return;
+
+            // Destruir gráfico anterior se existir
+            if (chartInstances['tasksCompletedPerWeek']) {
+                chartInstances['tasksCompletedPerWeek'].destroy();
+            }
+
+            const weeks = calculateTasksCompletedPerWeek();
+            const sortedWeeks = Object.entries(weeks).sort();
+            const labels = sortedWeeks.map(([week]) => week);
+            const data = sortedWeeks.map(([, count]) => count);
+
+            const ctx = canvas.getContext('2d');
+            chartInstances['tasksCompletedPerWeek'] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Tarefas Concluídas',
+                        data: data,
+                        borderColor: 'rgb(16, 185, 129)',
+                        backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                        tension: 0.1,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Calculate tasks by developer
+        function calculateTasksByDeveloper() {
+            const developerCounts = {};
+            
+            allTasks.forEach(task => {
+                if (task.assignees && task.assignees.length > 0) {
+                    task.assignees.forEach(assignee => {
+                        const name = assignee.username || 'N/A';
+                        // Check if task is within week filter
+                        if (task.date_created) {
+                            const date = new Date(parseInt(task.date_created));
+                            const weekKey = getWeekKey(date);
+                            if (isWeekInFilter(weekKey)) {
+                                developerCounts[name] = (developerCounts[name] || 0) + 1;
+                            }
+                        }
+                    });
+                }
+            });
+            
+            return developerCounts;
+        }
+
+        // Calculate tasks by type (QA vs Desenvolvimento) - returns separate data for each
+        function calculateTasksByType() {
+            const qaCounts = {};
+            const devCounts = {};
+            
+            allTasks.forEach(task => {
+                if (task.assignees && task.assignees.length > 0) {
+                    task.assignees.forEach(assignee => {
+                        const name = assignee.username || 'N/A';
+                        const type = getCollaboratorType(name);
+                        // Check if task is within week filter
+                        if (task.date_created) {
+                            const date = new Date(parseInt(task.date_created));
+                            const weekKey = getWeekKey(date);
+                            if (isWeekInFilter(weekKey)) {
+                                if (type === 'QA') {
+                                    qaCounts[name] = (qaCounts[name] || 0) + 1;
+                                } else {
+                                    devCounts[name] = (devCounts[name] || 0) + 1;
+                                }
+                            }
+                        }
+                    });
+                }
+            });
+            
+            return { qa: qaCounts, dev: devCounts };
+        }
+
+        // Render tasks by developer chart
+        function renderTasksByDeveloper() {
+            const canvas = document.getElementById('tasks-by-developer-chart');
+            if (!canvas) return;
+
+            // Destruir gráfico anterior se existir
+            if (chartInstances['tasksByDeveloper']) {
+                chartInstances['tasksByDeveloper'].destroy();
+            }
+
+            const developerCounts = calculateTasksByDeveloper();
+            const sortedDevelopers = Object.entries(developerCounts).sort((a, b) => b[1] - a[1]);
+
+            if (sortedDevelopers.length === 0) {
+                return;
+            }
+
+            const labels = sortedDevelopers.map(([developer]) => developer);
+            const data = sortedDevelopers.map(([, count]) => count);
+            const colors = [
+                'rgb(249, 115, 22)',
+                'rgb(59, 130, 246)',
+                'rgb(16, 185, 129)',
+                'rgb(239, 68, 68)',
+                'rgb(139, 92, 246)',
+                'rgb(236, 72, 153)'
+            ];
+
+            const ctx = canvas.getContext('2d');
+            chartInstances['tasksByDeveloper'] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Tarefas',
+                        data: data,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 1,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Calculate bugs per week
+        function calculateBugsPerWeek() {
+            const bugs = allTasks.filter(t => t.custom_item_id === 1004);
+            const weeks = {};
+            
+            bugs.forEach(task => {
+                const date = new Date(parseInt(task.date_created));
+                const weekKey = getWeekKey(date);
+                if (isWeekInFilter(weekKey)) {
+                    weeks[weekKey] = (weeks[weekKey] || 0) + 1;
+                }
+            });
+            
+            return weeks;
+        }
+
+        // Render bugs per week chart
+        function renderBugsPerWeek() {
+            const canvas = document.getElementById('bugs-per-week-chart');
+            if (!canvas) return;
+
+            // Destruir gráfico anterior se existir
+            if (chartInstances['bugsPerWeek']) {
+                chartInstances['bugsPerWeek'].destroy();
+            }
+
+            const weeks = calculateBugsPerWeek();
+            const sortedWeeks = Object.entries(weeks).sort();
+            const labels = sortedWeeks.map(([week]) => week);
+            const data = sortedWeeks.map(([, count]) => count);
+
+            const ctx = canvas.getContext('2d');
+            chartInstances['bugsPerWeek'] = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Bugs Criados',
+                        data: data,
+                        borderColor: 'rgb(239, 68, 68)',
+                        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                        tension: 0.1,
+                        fill: true
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render tasks by QA analysts chart
+        function renderTasksByQA() {
+            const canvas = document.getElementById('tasks-by-qa-chart');
+            if (!canvas) return;
+
+            // Destruir gráfico anterior se existir
+            if (chartInstances['tasksByQA']) {
+                chartInstances['tasksByQA'].destroy();
+            }
+
+            const typeData = calculateTasksByType();
+            const qaCounts = typeData.qa;
+            const sortedQA = Object.entries(qaCounts).sort((a, b) => b[1] - a[1]);
+
+            if (sortedQA.length === 0) {
+                return;
+            }
+
+            const labels = sortedQA.map(([name]) => name);
+            const data = sortedQA.map(([, count]) => count);
+            const colors = [
+                'rgb(239, 68, 68)',
+                'rgb(249, 115, 22)',
+                'rgb(245, 158, 11)',
+                'rgb(236, 72, 153)'
+            ];
+
+            const ctx = canvas.getContext('2d');
+            chartInstances['tasksByQA'] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Atuações',
+                        data: data,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 1,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render tasks by Development analysts chart
+        function renderTasksByDev() {
+            const canvas = document.getElementById('tasks-by-dev-chart');
+            if (!canvas) return;
+
+            // Destruir gráfico anterior se existir
+            if (chartInstances['tasksByDev']) {
+                chartInstances['tasksByDev'].destroy();
+            }
+
+            const typeData = calculateTasksByType();
+            const devCounts = typeData.dev;
+            const sortedDev = Object.entries(devCounts).sort((a, b) => b[1] - a[1]);
+
+            if (sortedDev.length === 0) {
+                return;
+            }
+
+            const labels = sortedDev.map(([name]) => name);
+            const data = sortedDev.map(([, count]) => count);
+            const colors = [
+                'rgb(59, 130, 246)',
+                'rgb(16, 185, 129)',
+                'rgb(139, 92, 246)',
+                'rgb(20, 184, 166)',
+                'rgb(99, 102, 241)'
+            ];
+
+            const ctx = canvas.getContext('2d');
+            chartInstances['tasksByDev'] = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Atuações',
+                        data: data,
+                        backgroundColor: colors.slice(0, labels.length),
+                        borderWidth: 1,
+                        borderColor: '#ffffff'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            ticks: {
+                                stepSize: 1
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render all executive metrics
+        function renderExecutiveMetrics() {
+            console.log('renderExecutiveMetrics iniciado');
+            populateWeekFilters();
+            renderMigrationsPerWeek();
+            renderMigrationTime();
+            renderMigrationsByStatus();
+            renderTasksCompletedPerWeek();
+            renderTasksByDeveloper();
+            renderTasksByQA();
+            renderTasksByDev();
+            renderBugsPerWeek();
+            console.log('renderExecutiveMetrics concluído');
+        }
+
+        // Load tasks on page load
+        document.addEventListener('DOMContentLoaded', loadTasks);
+    </script>
+</body>
+</html>

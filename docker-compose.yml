@@ -1,0 +1,42 @@
+services:
+
+  backend:
+    build: ./backend
+    container_name: liax-backend-dashboard
+    ports:
+      - "4001:8000"
+    environment:
+      DATABASE_URL: postgresql://admin:1i4x%40Liax@host.docker.internal:5432/dashboard
+      CLICKUP_TOKEN: ${CLICKUP_TOKEN:-pk_78841674_UDO4MG6XRKSWRWLKJW0TMTHOO4B0A4K7}
+      SECRET_KEY: ${SECRET_KEY:-liax-dashboard-secret-key-change-in-production}
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    build: ./frontend
+    container_name: liax-frontend-dashboard
+    ports:
+      - "5001:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  dashboard-legacy:
+    build:
+      context: ./old
+      dockerfile: Dockerfile
+    container_name: clickup-dashboard-legacy
+    ports:
+      - "5002:5000"
+    environment:
+      - CLICKUP_TOKEN=${CLICKUP_TOKEN:-pk_78841674_UDO4MG6XRKSWRWLKJW0TMTHOO4B0A4K7}
+      - ENABLE_AUTO_RELOAD=false
+    volumes:
+      - ./old/app.py:/app/app.py
+      - ./old/templates:/app/templates
+      - ./projects.json:/app/projects.json
+      - ./cache:/app/cache
+    restart: unless-stopped

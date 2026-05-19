@@ -1,0 +1,13 @@
+services:
+  backend:
+    environment:
+      DATABASE_URL: postgresql://admin:1i4x%40Liax@host.docker.internal:5432/dashboard
+      CLICKUP_TOKEN: ${CLICKUP_TOKEN:-pk_78841674_UDO4MG6XRKSWRWLKJW0TMTHOO4B0A4K7}
+      SECRET_KEY: ${SECRET_KEY:-liax-dashboard-secret-key-change-in-production}
+    volumes:
+      - ./backend:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  frontend:
+    volumes: []

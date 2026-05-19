@@ -1,0 +1,10 @@
+{
+  "projects": [
+    {
+      "id": "1",
+      "name": "Migração Dataflex - Lello Imóveis",
+      "url": "https://api.clickup.com/api/v2/list/901321445542/task",
+      "template": "dashboard_lello.html"
+    }
+  ]
+}

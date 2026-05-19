@@ -1,0 +1,43 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply font-body bg-liax-bg text-liax-text;
+  }
+
+  h1, h2, h3, h4, h5 {
+    @apply font-heading;
+  }
+}
+
+@layer components {
+  .liax-card {
+    @apply bg-white rounded-2xl shadow-liax-xl p-6;
+  }
+
+  .liax-btn-primary {
+    @apply bg-liax-primary hover:bg-liax-primary-dark text-white font-semibold px-5 py-2.5 rounded-xl transition-colors duration-200;
+  }
+
+  .liax-btn-secondary {
+    @apply bg-liax-bg-light hover:bg-liax-surface-border text-liax-text-dark font-semibold px-5 py-2.5 rounded-xl border border-liax-surface-border transition-colors duration-200;
+  }
+
+  .liax-input {
+    @apply w-full px-4 py-2.5 rounded-xl border border-liax-surface-border bg-white text-liax-text focus:outline-none focus:ring-2 focus:ring-liax-primary transition-all duration-200;
+  }
+
+  .liax-badge {
+    @apply inline-flex items-center px-3 py-1 rounded-full text-xs font-semibold;
+  }
+
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl text-slate-300 hover:bg-white/10 hover:text-white transition-all duration-200 cursor-pointer;
+  }
+
+  .sidebar-link.active {
+    @apply bg-white/20 text-white font-semibold;
+  }
+}

@@ -1,0 +1,20 @@
+Descrições dos PDFs Gerados
+=============================
+
+1. impacto_ia_educacao.pdf
+Este artigo explora como a inteligência artificial está transformando o setor educacional, desde sistemas de aprendizado adaptativo e tutores virtuais até análise de dados educacionais e personalização do ensino. Discute os benefícios, desafios éticos e o futuro da educação com IA.
+
+2. sustentabilidade_urbana.pdf
+Examina como o conceito de cidades inteligentes utiliza tecnologia e dados para resolver problemas urbanos como poluição, congestionamento e gestão de resíduos. Aborda IoT, transporte inteligente, infraestrutura verde e os desafios de implementação.
+
+3. evolucao_comercio_eletronico.pdf
+Analisa a transformação dramática do comércio eletrônico, incluindo realidade aumentada, personalização com IA, omnichannel, logística automatizada e o futuro híbrido do varejo que combina eficiência digital com experiência humana.
+
+4. bem_estar_mental_trabalho.pdf
+Discute a importância da saúde mental nas organizações modernas, abordando programas de bem-estar, cultura organizacional, prevenção de burnout, design do ambiente de trabalho e o retorno sobre investimento em iniciativas de saúde mental.
+
+5. revolucao_biomedicina.pdf
+Explora as inovações em terapias gênicas (CRISPR-Cas9), medicina personalizada, farmacogenômica, biologia sintética e medicina regenerativa, além das questões éticas, acesso e implicações sociais dessas tecnologias.
+
+6. transformacao_industria_automotiva.pdf
+Analisa a transição para veículos elétricos, incluindo tecnologia de baterias, infraestrutura de carregamento, veículos autônomos, economia compartilhada, desafios de sustentabilidade e o impacto econômico e regulatório dessa transformação.

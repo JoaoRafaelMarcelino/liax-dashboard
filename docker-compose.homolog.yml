@@ -1,0 +1,39 @@
+services:
+
+  backend:
+    build: ./backend
+    container_name: liax-backend-dashboard-hml
+    ports:
+      - "4002:8000"
+    env_file:
+      - .env.homolog
+    volumes:
+      - ./backend:/app
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: liax-frontend-dashboard-hml
+    ports:
+      - "5003:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  dashboard-legacy:
+    build:
+      context: ./old
+      dockerfile: Dockerfile
+    container_name: clickup-dashboard-legacy-hml
+    ports:
+      - "5004:5000"
+    env_file:
+      - .env.homolog
+    environment:
+      - ENABLE_AUTO_RELOAD=false
+    volumes:
+      - ./old/app.py:/app/app.py
+      - ./old/templates:/app/templates
+      - ./projects.json:/app/projects.json
+      - ./cache:/app/cache
+    restart: unless-stopped
