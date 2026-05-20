@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 from .database import engine
@@ -10,6 +11,9 @@ from .services import sync_scheduler
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    with engine.connect() as conn:
+        conn.execute(text("CREATE SCHEMA IF NOT EXISTS dashboard"))
+        conn.commit()
     Base.metadata.create_all(bind=engine)
     sync_scheduler.start()
     yield
