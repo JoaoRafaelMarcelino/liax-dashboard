@@ -1,16 +1,73 @@
 from fastapi import APIRouter, Depends, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 from sqlalchemy import func, case, and_
 from typing import Optional
 from datetime import datetime, timezone, timedelta
+from unicodedata import normalize as _unicode_normalize
+import re
 from ..database import get_db
 from ..models.task import Task, TaskAssignee, ClickupUser
 from ..models.user import User
+from ..schemas.task import TaskOut
 from ..services.auth_service import get_current_user
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 QA_MEMBERS = ["Thiago", "Ana Keila", "Juliana Oliveira", "Pedro Samuel", "Cristian"]
+
+PHASE_GROUPS = [
+    {
+        "key": "backlog",
+        "label": "Backlog",
+        "color": "#94a3b8",
+        "statuses": ["Backlog"],
+    },
+    {
+        "key": "migrando",
+        "label": "Migrando",
+        "color": "#0074e8",
+        "statuses": [
+            "Soma QA Liax",
+            "Em qa",
+            "Entregar para Homologação",
+            "Qa aprovado com dependencia",
+            "Ag desenv. Front",
+            "Reteste QA",
+            "Ag Finalizar Bugs",
+            "Deploy",
+        ],
+    },
+    {
+        "key": "hml_lello",
+        "label": "HML Lello",
+        "color": "#6366f1",
+        "statuses": ["Soma Homologação Lello", "Homologação Aprovada"],
+    },
+    {
+        "key": "defeitos_hml",
+        "label": "Defeitos HML",
+        "color": "#f97316",
+        "statuses": ["Homolgação com bugs", "Homologação com bugs"],
+    },
+    {
+        "key": "producao",
+        "label": "Produção",
+        "color": "#17dd30",
+        "statuses": ["Prog.Prod Aprovados", "Programas Cancelados Prod"],
+    },
+    {
+        "key": "defeitos_prod",
+        "label": "Defeitos Prod",
+        "color": "#cc3366",
+        "statuses": ["Prog. Em Prod c/ Bug"],
+    },
+    {
+        "key": "block",
+        "label": "Block",
+        "color": "#1c3775",
+        "statuses": ["Soma Block", "Falta Detalhamento"],
+    },
+]
 
 
 def _is_qa(username: str) -> bool:
@@ -40,6 +97,31 @@ def _get_week_filtered_tasks(db: Session, week_start: Optional[str], week_end: O
         return True
 
     return [t for t in tasks if in_range(task_week(t))]
+
+
+def _normalize_text(value: Optional[str]) -> str:
+    if not value:
+        return ""
+    normalized = _unicode_normalize("NFKD", value)
+    normalized = normalized.encode("ascii", "ignore").decode("ascii")
+    normalized = re.sub(r"[^a-zA-Z0-9]+", " ", normalized)
+    return re.sub(r"\s+", " ", normalized).strip().lower()
+
+
+def _phase_for_status(status_name: Optional[str]):
+    normalized = _normalize_text(status_name)
+    if not normalized:
+        return None
+    for phase in PHASE_GROUPS:
+        for candidate in phase["statuses"]:
+            candidate_norm = _normalize_text(candidate)
+            if normalized == candidate_norm or normalized in candidate_norm or candidate_norm in normalized:
+                return phase
+    return None
+
+
+def _serialize_task(task: Task) -> dict:
+    return TaskOut.model_validate(task, from_attributes=True).model_dump(mode="json")
 
 
 @router.get("/summary")
@@ -98,6 +180,7 @@ def migration_time(exclude_extremes: bool = False, db: Session = Depends(get_db)
             selectinload(Task.tags),
         )
         .filter(Task.custom_item_id == 0)
+        .order_by(Task.status_orderindex.asc().nullsfirst(), Task.date_created.desc())
         .all()
     )
 
@@ -232,6 +315,43 @@ def migrations_by_status(db: Session = Depends(get_db), _: User = Depends(get_cu
         .all()
     )
     return [{"status": r[0], "color": r[1], "count": r[2]} for r in sorted(rows, key=lambda x: -x[2])]
+
+
+@router.get("/phase-distribution")
+def phase_distribution(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
+    tasks = (
+        db.query(Task)
+        .options(
+            selectinload(Task.assignees),
+            selectinload(Task.dev_back),
+            selectinload(Task.dev_front),
+            selectinload(Task.qa),
+            selectinload(Task.reteste),
+            selectinload(Task.tags),
+        )
+        .filter(Task.custom_item_id == 0)
+        .all()
+    )
+
+    grouped = {
+        phase["key"]: {
+            "key": phase["key"],
+            "label": phase["label"],
+            "color": phase["color"],
+            "count": 0,
+            "tasks": [],
+        }
+        for phase in PHASE_GROUPS
+    }
+
+    for task in tasks:
+        phase = _phase_for_status(task.status_name)
+        if not phase:
+            continue
+        grouped[phase["key"]]["count"] += 1
+        grouped[phase["key"]]["tasks"].append(_serialize_task(task))
+
+    return [grouped[phase["key"]] for phase in PHASE_GROUPS]
 
 
 @router.get("/tasks-completed-per-week")

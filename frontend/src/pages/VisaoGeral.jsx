@@ -12,16 +12,16 @@ import { StatCard } from '../components/UI/Card'
 import TaskModal from '../components/UI/TaskModal'
 import ForecastSection from '../components/Forecast/ForecastSection'
 import {
-  Loader2, LayoutDashboard, RotateCcw, Settings2,
+  Loader2, LayoutDashboard, Settings2,
   GitMerge, Bug, TrendingUp, CheckCircle2, Clock, Zap, Turtle, PackageCheck, CheckSquare, X,
   Code2, FlaskConical, Rocket, Timer,
 } from 'lucide-react'
-import { Bar } from 'react-chartjs-2'
+import { Bar, Doughnut } from 'react-chartjs-2'
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, BarElement, Tooltip, Legend,
+  Chart as ChartJS, CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend,
 } from 'chart.js'
 
-ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
+ChartJS.register(CategoryScale, LinearScale, BarElement, ArcElement, Tooltip, Legend)
 
 function OverviewShell({ title, subtitle, icon: Icon, children, action }) {
   return (
@@ -121,51 +121,180 @@ function PhaseMetricsOverview({ migrationTime }) {
   )
 }
 
-function StatusRanking({ data = [] }) {
-  if (!data || data.length === 0) {
+function PhaseDistributionChart({ phases = [] }) {
+  const [viewMode, setViewMode] = useState('pie')
+  const [selectedPhase, setSelectedPhase] = useState(null)
+  const [selectedTask, setSelectedTask] = useState(null)
+
+  if (!phases || phases.length === 0) {
     return (
-      <div className="bg-white rounded-2xl shadow-liax-xl p-6 h-full flex items-center justify-center text-sm text-liax-neutral">
-        Sem dados de status para exibir
-      </div>
+      <OverviewShell
+        title="Distribuição por Fases"
+        subtitle="Agrupamento operacional das migrações"
+        icon={CheckSquare}
+      >
+        <div className="h-64 flex items-center justify-center text-sm text-liax-neutral">
+          Sem dados para exibir
+        </div>
+      </OverviewShell>
     )
   }
 
-  const total = data.reduce((sum, item) => sum + (item.count || 0), 0)
+  const total = phases.reduce((sum, item) => sum + (item.count || 0), 0)
+  const labels = phases.map((phase) => phase.label)
+  const values = phases.map((phase) => phase.count || 0)
+  const colors = phases.map((phase) => phase.color || '#0074e8')
+
+  const chartData = {
+    labels,
+    datasets: [{
+      data: values,
+      backgroundColor: colors,
+      borderWidth: 2,
+      borderColor: '#fff',
+      borderRadius: 8,
+      borderSkipped: false,
+    }],
+  }
+
+  const openPhase = (index) => {
+    const phase = phases[index]
+    if (!phase) return
+    setSelectedPhase(phase)
+  }
+
+  const commonOptions = {
+    responsive: true,
+    maintainAspectRatio: false,
+    onClick: (event, elements) => {
+      if (!elements?.length) return
+      openPhase(elements[0].index)
+    },
+    plugins: {
+      tooltip: { mode: 'index', intersect: false },
+    },
+  }
+
+  const pieOptions = {
+    ...commonOptions,
+    plugins: {
+      ...commonOptions.plugins,
+      legend: {
+        position: 'bottom',
+        labels: {
+          boxWidth: 10,
+          padding: 8,
+          font: { size: 11 },
+          usePointStyle: true,
+          pointStyle: 'circle',
+        },
+      },
+    },
+    cutout: '60%',
+    layout: { padding: 10 },
+  }
+
+  const barOptions = {
+    ...commonOptions,
+    plugins: {
+      ...commonOptions.plugins,
+      legend: { display: false },
+    },
+    scales: {
+      x: {
+        grid: { display: false },
+        ticks: { font: { size: 11 } },
+      },
+      y: {
+        beginAtZero: true,
+        grid: { color: '#f0f0f0' },
+        ticks: { stepSize: 1 },
+      },
+    },
+  }
+
+  const currentPhase = selectedPhase
+
+  const renderRow = (task, onClick) => (
+    <button
+      key={task.id}
+      onClick={onClick}
+      className="w-full flex items-center justify-between px-6 py-3 hover:bg-liax-bg-light transition-colors text-left group"
+    >
+      <div className="flex items-center gap-3 min-w-0">
+        <span className="w-2 h-2 rounded-full shrink-0" style={{ background: task.status_color || '#94a3b8' }} />
+        <div className="min-w-0">
+          <p className="text-sm font-medium text-liax-text-dark truncate group-hover:text-liax-primary">{task.name}</p>
+          <p className="text-xs text-liax-neutral truncate">{task.status_name || '—'}{task.programa ? ` • ${task.programa}` : ''}</p>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 shrink-0 ml-4">
+        {task.date_done && <span className="text-xs text-liax-neutral">{new Date(task.date_done).toLocaleDateString('pt-BR')}</span>}
+        <span
+          className="text-xs px-2 py-0.5 rounded-full font-medium"
+          style={{ background: (task.status_color || '#94a3b8') + '22', color: task.status_color || '#94a3b8' }}
+        >
+          {task.status_name || '—'}
+        </span>
+      </div>
+    </button>
+  )
 
   return (
     <OverviewShell
-      title="Distribuição Executiva por Status"
-      subtitle="Distribuição percentual das migrações"
+      title="Distribuição por Fases"
+      subtitle="Clique em uma fase para ver as migrações e alternar entre pizza ou barras verticais"
       icon={CheckSquare}
       action={(
-        <div className="text-right">
-          <p className="text-xs text-liax-neutral">Total</p>
-          <p className="text-lg font-heading font-bold text-liax-text-dark">{total}</p>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setViewMode('pie')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${viewMode === 'pie' ? 'bg-liax-primary text-white' : 'bg-liax-bg-light text-liax-neutral hover:text-liax-text-dark'}`}
+          >
+            Pizza
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode('bar')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${viewMode === 'bar' ? 'bg-liax-primary text-white' : 'bg-liax-bg-light text-liax-neutral hover:text-liax-text-dark'}`}
+          >
+            Barras verticais
+          </button>
         </div>
       )}
     >
-      <div className="space-y-3 max-h-[320px] overflow-auto pr-1">
-        {data.map((item, index) => {
-          const pct = total ? (item.count / total) * 100 : 0
-          return (
-            <div key={`${item.status}-${index}`}>
-              <div className="flex items-center justify-between gap-3 mb-1">
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: item.color || '#94a3b8' }} />
-                  <span className="text-sm text-liax-text-dark truncate capitalize">{item.status || 'Sem status'}</span>
-                </div>
-                <span className="text-xs text-liax-neutral shrink-0">{item.count} • {pct.toFixed(1)}%</span>
-              </div>
-              <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
-                <div
-                  className="h-full rounded-full"
-                  style={{ width: `${Math.max(pct, 2)}%`, background: item.color || '#0074e8' }}
-                />
-              </div>
-            </div>
-          )
-        })}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between text-xs text-liax-neutral">
+          <span>Total de migrações em fases</span>
+          <span className="font-semibold text-liax-text-dark">{total}</span>
+        </div>
+        <div className={viewMode === 'pie' ? 'h-[320px]' : 'h-[320px]'}>
+          {viewMode === 'pie' ? (
+            <Doughnut data={chartData} options={pieOptions} />
+          ) : (
+            <Bar data={chartData} options={barOptions} />
+          )}
+        </div>
+        <p className="text-xs text-liax-neutral">Clique em uma fase para abrir a lista das migrações relacionadas.</p>
       </div>
+
+      {currentPhase && (
+        <TaskListModal
+          title={currentPhase.label}
+          subtitle={`${currentPhase.count ?? 0} migrações nessa fase`}
+          icon={CheckSquare}
+          gradient="bg-liax-primary"
+          tasks={currentPhase.tasks || []}
+          onTaskClick={setSelectedTask}
+          onClose={() => setSelectedPhase(null)}
+          renderRow={renderRow}
+        />
+      )}
+
+      {selectedTask && (
+        <TaskModal task={selectedTask} onClose={() => setSelectedTask(null)} />
+      )}
     </OverviewShell>
   )
 }
@@ -348,7 +477,7 @@ function HomologacaoSection({ data }) {
 }
 
 function ChartBlock({ chartKey, data, params }) {
-  const { summary, migrationTime, forecastData, migrationsPerWeek, tasksCompleted, bugsPerWeek, libHmlPerWeek, migrationsByStatus, collaborators, bugsByProg, libHmlSummary } = data
+  const { summary, migrationTime, forecastData, migrationsPerWeek, tasksCompleted, bugsPerWeek, libHmlPerWeek, migrationsByStatus, phaseDistribution, collaborators, bugsByProg, libHmlSummary } = data
 
   switch (chartKey) {
     case 'summary_cards':
@@ -394,7 +523,7 @@ function ChartBlock({ chartKey, data, params }) {
       return <DoughnutChart data={migrationsByStatus} title="Distribuição Atual de Migrações" description="Distribuição das migrações pelos status atuais" />
 
     case 'migrations_status_summary':
-      return <StatusRanking data={migrationsByStatus} />
+      return <PhaseDistributionChart phases={phaseDistribution} />
 
     case 'collaborators_all':
       return <BarChart data={collaborators.all} title="Atuação Consolidada por Colaborador" description="Número de tarefas por responsável (todos)" />
@@ -494,6 +623,7 @@ export default function VisaoGeral() {
     bugsPerWeek: [],
     libHmlPerWeek: [],
     migrationsByStatus: [],
+    phaseDistribution: [],
     collaborators: { all: [], qa: [], dev: [] },
     bugsByProg: [],
     libHmlSummary: null,
@@ -519,6 +649,7 @@ export default function VisaoGeral() {
       dashboardAPI.migrationTime(),
       dashboardAPI.forecastData(),
       dashboardAPI.migrationsByStatus(),
+      dashboardAPI.phaseDistribution(),
       dashboardAPI.migrationsPerWeek(params),
       dashboardAPI.tasksCompletedPerWeek(params),
       dashboardAPI.bugsPerWeek(params),
@@ -529,12 +660,13 @@ export default function VisaoGeral() {
       dashboardAPI.statusLiberacaoHml(),
       dashboardAPI.aprovacoes_hml(params),
       dashboardAPI.bugsHmlMigrations(),
-    ]).then(([sum, mt, forecast, mbs, mpw, tcp, bpw, lib, libSum, collab, bprog, slib, aprov, bhml]) => {
+    ]).then(([sum, mt, forecast, mbs, phases, mpw, tcp, bpw, lib, libSum, collab, bprog, slib, aprov, bhml]) => {
       const freshData = {
         summary: sum.data,
         migrationTime: mt.data,
         forecastData: forecast.data,
         migrationsByStatus: mbs.data,
+        phaseDistribution: phases.data,
         migrationsPerWeek: mpw.data,
         tasksCompleted: tcp.data,
         bugsPerWeek: bpw.data,

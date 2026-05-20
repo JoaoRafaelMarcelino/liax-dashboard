@@ -51,6 +51,7 @@ export const dashboardAPI = {
   migrationsPerWeek: (params) => api.get('/dashboard/migrations-per-week', { params }),
   migrationTime: (params) => api.get('/dashboard/migration-time', { params }),
   migrationsByStatus: () => api.get('/dashboard/migrations-by-status'),
+  phaseDistribution: () => api.get('/dashboard/phase-distribution'),
   tasksCompletedPerWeek: (params) => api.get('/dashboard/tasks-completed-per-week', { params }),
   tasksByCollaborator: (params) => api.get('/dashboard/tasks-by-collaborator', { params }),
   bugsPerWeek: (params) => api.get('/dashboard/bugs-per-week', { params }),

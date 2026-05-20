@@ -57,9 +57,9 @@ export const AVAILABLE_CHARTS = [
   },
   {
     key: 'migrations_status_summary',
-    label: 'Distribuição Executiva por Status',
-    description: 'Lista com volume e participação percentual por status',
-    tooltip: 'Resume como as migrações estão distribuídas entre os status e qual a participação relativa de cada um.',
+    label: 'Distribuição por Fases',
+    description: 'Gráfico de fases com visão em pizza ou barras verticais',
+    tooltip: 'Agrupa as migrações em fases operacionais e permite alternar entre pizza e barras verticais.',
     size: 'half',
   },
   {
