@@ -7,8 +7,12 @@ services:
       - "4002:8000"
     env_file:
       - .env.homolog
+    environment:
+      DATABASE_URL: postgresql://admin:1i4x%40Liax@host.docker.internal:5432/dashboard
     volumes:
       - ./backend:/app
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   frontend:
