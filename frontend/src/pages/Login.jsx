@@ -68,8 +68,8 @@ export default function Login() {
       <div className="w-full max-w-md px-6">
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="w-16 h-16 rounded-2xl bg-white/10 backdrop-blur flex items-center justify-center mx-auto mb-4 border border-white/20">
-            <span className="text-white font-heading font-black text-3xl">L</span>
+          <div className="w-40 mx-auto mb-4">
+            <img src="/brand/liax-logo.png" alt="Liax Dashboard" className="w-full h-auto object-contain drop-shadow-lg" />
           </div>
           <h1 className="text-white font-heading font-bold text-2xl">Liax Dashboard</h1>
           <p className="text-slate-400 text-sm mt-1">Plataforma de Métricas ClickUp</p>

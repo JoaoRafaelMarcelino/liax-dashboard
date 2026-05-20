@@ -8,8 +8,8 @@ export default function Header() {
     <header className="fixed top-0 left-0 right-0 h-16 z-20 flex items-center justify-between px-6 shadow-sm"
       style={{ background: 'linear-gradient(90deg, #1c3775 0%, #363063 100%)' }}>
       <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center">
-          <span className="text-white font-heading font-bold text-lg">L</span>
+        <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center overflow-hidden border border-white/10">
+          <img src="/brand/liax-icon.png" alt="Liax" className="w-full h-full object-contain" />
         </div>
         <div>
           <p className="text-white font-heading font-bold text-base leading-tight">Liax</p>
