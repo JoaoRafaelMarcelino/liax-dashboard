@@ -4,7 +4,6 @@ import { useAppConfig } from '../context/AppConfigContext'
 import { useAuth } from '../context/AuthContext'
 import { dashboardAPI } from '../services/api'
 import { readCache, writeCache } from '../utils/cache'
-import { formatWeekWithRange } from '../utils/dateHelpers'
 import LineChart from '../components/Charts/LineChart'
 import BarChart from '../components/Charts/BarChart'
 import DoughnutChart from '../components/Charts/DoughnutChart'
@@ -23,33 +22,6 @@ import {
 } from 'chart.js'
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend)
-
-function WeekFilter({ weeks, start, end, onStartChange, onEndChange, onReset }) {
-  return (
-    <div className="bg-white rounded-2xl shadow-liax-xl p-4 mb-6">
-      <div className="flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="block text-xs font-semibold text-liax-neutral mb-1.5">Semana Inicial</label>
-          <select value={start} onChange={e => onStartChange(e.target.value)} className="liax-input py-2 text-sm w-52">
-            <option value="">Todas</option>
-            {weeks.map(w => <option key={w} value={w}>{formatWeekWithRange(w)}</option>)}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-semibold text-liax-neutral mb-1.5">Semana Final</label>
-          <select value={end} onChange={e => onEndChange(e.target.value)} className="liax-input py-2 text-sm w-52">
-            <option value="">Todas</option>
-            {weeks.map(w => <option key={w} value={w}>{formatWeekWithRange(w)}</option>)}
-          </select>
-        </div>
-        <button onClick={onReset}
-          className="flex items-center gap-2 px-3 py-2 rounded-xl bg-liax-bg-light text-liax-neutral hover:bg-liax-surface-border text-sm font-medium transition-colors">
-          <RotateCcw size={13} /> Resetar
-        </button>
-      </div>
-    </div>
-  )
-}
 
 function OverviewShell({ title, subtitle, icon: Icon, children, action }) {
   return (
@@ -510,9 +482,6 @@ export default function VisaoGeral() {
   const navigate = useNavigate()
 
   const [activeTab, setActiveTab] = useState(0)
-  const [weeks, setWeeks] = useState([])
-  const [weekStart, setWeekStart] = useState('')
-  const [weekEnd, setWeekEnd] = useState('')
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
 
@@ -534,16 +503,9 @@ export default function VisaoGeral() {
   })
 
   useEffect(() => {
-    dashboardAPI.availableWeeks().then(r => setWeeks(r.data)).catch(() => {})
-  }, [])
-
-  useEffect(() => {
     if (visionTabs.length === 0) { setLoading(false); return }
-    const params = {
-      ...(weekStart ? { week_start: weekStart } : {}),
-      ...(weekEnd ? { week_end: weekEnd } : {}),
-    }
-    const cacheKey = `visao_geral_${weekStart || 'all'}_${weekEnd || 'all'}`
+    const params = {}
+    const cacheKey = 'visao_geral_all'
     const cached = readCache(cacheKey)
     if (cached) {
       setData(cached)
@@ -590,9 +552,9 @@ export default function VisaoGeral() {
       setLoading(false)
       setRefreshing(false)
     })
-  }, [visionTabs, weekStart, weekEnd])
+  }, [visionTabs])
 
-  const params = { week_start: weekStart, week_end: weekEnd }
+  const params = {}
 
   return (
     <div>
@@ -628,15 +590,6 @@ export default function VisaoGeral() {
         </div>
       ) : (
         <>
-          <WeekFilter
-            weeks={weeks}
-            start={weekStart}
-            end={weekEnd}
-            onStartChange={setWeekStart}
-            onEndChange={setWeekEnd}
-            onReset={() => { setWeekStart(''); setWeekEnd('') }}
-          />
-
           {/* Tab bar */}
           <div className="flex gap-1 mb-6 bg-white rounded-2xl shadow-liax-xl p-2">
             {visionTabs.map((tab, idx) => (
