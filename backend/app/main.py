@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 import logging
 
-logger = logging.getLogger("uvicorn.access")
+logger = logging.getLogger(__name__)
 from .database import engine
 from .models import user, task, sync_config, app_config, planning_goal
 from .database import Base
@@ -26,8 +26,8 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Liax Dashboard API",
     version="2.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
+    docs_url="/docs",
+    redoc_url="/redoc",
     lifespan=lifespan,
 )
 
@@ -57,6 +57,6 @@ app.include_router(app_config_router.router)
 app.include_router(planning.router)
 
 
-@app.get("/api/health")
+@app.get("/health")
 def health():
     return {"status": "ok", "version": "2.0.0"}

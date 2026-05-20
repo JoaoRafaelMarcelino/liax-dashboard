@@ -7,7 +7,7 @@ from ..models.user import User
 from ..schemas.task import TaskOut
 from ..services.auth_service import get_current_user
 
-router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
 @router.get("/", response_model=List[TaskOut])

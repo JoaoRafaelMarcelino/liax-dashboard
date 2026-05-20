@@ -7,7 +7,7 @@ from ..models.planning_goal import PlanningGoal
 from ..models.user import User
 from ..services.auth_service import get_current_user, require_admin
 
-router = APIRouter(prefix="/api/planning", tags=["planning"])
+router = APIRouter(prefix="/planning", tags=["planning"])
 
 
 class PlanningGoalCreate(BaseModel):

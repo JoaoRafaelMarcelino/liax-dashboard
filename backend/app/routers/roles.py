@@ -6,7 +6,7 @@ from ..database import get_db
 from ..models.user import UserRole, User
 from ..services.auth_service import require_admin
 
-router = APIRouter(prefix="/api/roles", tags=["roles"])
+router = APIRouter(prefix="/roles", tags=["roles"])
 
 ALL_PERMISSIONS = [
     {"key": "dashboard",         "label": "Dashboard",             "group": "Páginas"},

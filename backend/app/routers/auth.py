@@ -6,7 +6,7 @@ from ..schemas.auth import LoginRequest, ChangePasswordRequest, TokenResponse
 from ..utils.security import verify_password, hash_password, create_access_token
 from ..services.auth_service import get_current_user
 
-router = APIRouter(prefix="/api/auth", tags=["auth"])
+router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/login", response_model=TokenResponse)

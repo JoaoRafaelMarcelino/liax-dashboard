@@ -8,7 +8,7 @@ from ..models.task import Task, TaskAssignee, ClickupUser
 from ..models.user import User
 from ..services.auth_service import get_current_user
 
-router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
 QA_MEMBERS = ["Thiago", "Ana Keila", "Juliana Oliveira", "Pedro Samuel", "Cristian"]
 

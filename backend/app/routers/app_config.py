@@ -7,7 +7,7 @@ from ..models.app_config import AppConfig
 from ..models.user import User
 from ..services.auth_service import get_current_user, require_admin
 
-router = APIRouter(prefix="/api/app-config", tags=["app-config"])
+router = APIRouter(prefix="/app-config", tags=["app-config"])
 
 ALLOWED_KEYS = {"vision_tabs", "menu_visibility", "homologacao_section_visible"}
 

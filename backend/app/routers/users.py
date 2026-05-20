@@ -7,7 +7,7 @@ from ..schemas.user import UserCreate, UserUpdate, UserResponse
 from ..utils.security import hash_password
 from ..services.auth_service import require_admin
 
-router = APIRouter(prefix="/api/users", tags=["users"])
+router = APIRouter(prefix="/users", tags=["users"])
 
 DEFAULT_PASSWORD = "1i4x@Mudar"
 

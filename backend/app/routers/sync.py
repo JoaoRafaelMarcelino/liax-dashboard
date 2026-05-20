@@ -9,7 +9,7 @@ from ..services.auth_service import require_admin, get_current_user
 from ..services import sync_scheduler
 from ..services.clickup_service import sync_tasks
 
-router = APIRouter(prefix="/api/sync", tags=["sync"])
+router = APIRouter(prefix="/sync", tags=["sync"])
 
 
 def _config_to_dict(config: SyncConfig) -> dict:
