@@ -1,10 +1,7 @@
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from sqlalchemy import text
 from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
-import logging
-
-logger = logging.getLogger(__name__)
 from .database import engine
 from .models import user, task, sync_config, app_config, planning_goal
 from .database import Base
@@ -30,14 +27,6 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
-
-@app.middleware("http")
-async def log_requests(request: Request, call_next):
-    logger.warning(f"[REQUEST] {request.method} {request.url.path} (from {request.client.host})")
-    response = await call_next(request)
-    logger.warning(f"[RESPONSE] {request.method} {request.url.path} -> {response.status_code}")
-    return response
-
 
 app.add_middleware(
     CORSMiddleware,
