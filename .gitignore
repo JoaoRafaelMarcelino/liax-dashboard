@@ -5,8 +5,11 @@
 .env.production
 .env.test
 .env.homolog
+.env.prod
+.env.aws
 .env.*.local
 !.env.example
+!.env.prod.example
 
 # Python
 __pycache__/
@@ -38,3 +41,6 @@ Thumbs.db
 
 # dumps
 *.backup
+
+# Docker image exports
+scripts/*.tar
