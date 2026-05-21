@@ -45,6 +45,53 @@ function OverviewShell({ title, subtitle, icon: Icon, children, action }) {
   )
 }
 
+const phaseValueLabelsPlugin = {
+  id: 'phaseValueLabels',
+  afterDatasetsDraw(chart, args, pluginOptions) {
+    const datasetMeta = chart.getDatasetMeta(0)
+    const values = chart.data.datasets?.[0]?.data || []
+
+    if (!datasetMeta?.data?.length) return
+
+    const { ctx } = chart
+    ctx.save()
+    ctx.font = pluginOptions?.font || '600 11px Inter, system-ui, sans-serif'
+    ctx.textAlign = 'center'
+    ctx.textBaseline = 'middle'
+
+    datasetMeta.data.forEach((element, index) => {
+      const value = values[index]
+      if (value == null || value === 0) return
+
+      if (chart.config.type === 'doughnut') {
+        const props = element.getProps(['x', 'y', 'startAngle', 'endAngle', 'innerRadius', 'outerRadius'], true)
+        const angle = (props.startAngle + props.endAngle) / 2
+        const radius = props.innerRadius + ((props.outerRadius - props.innerRadius) * 0.68)
+        const x = props.x + (Math.cos(angle) * radius)
+        const y = props.y + (Math.sin(angle) * radius)
+
+        ctx.fillStyle = pluginOptions?.pieColor || '#ffffff'
+        ctx.strokeStyle = pluginOptions?.pieStroke || 'rgba(15, 23, 42, 0.55)'
+        ctx.lineWidth = pluginOptions?.pieStrokeWidth || 3
+        ctx.strokeText(String(value), x, y)
+        ctx.fillText(String(value), x, y)
+        return
+      }
+
+      const props = element.getProps(['x', 'y'], true)
+      const y = props.y - 10
+
+      ctx.fillStyle = pluginOptions?.barColor || '#0f172a'
+      ctx.strokeStyle = pluginOptions?.barStroke || '#ffffff'
+      ctx.lineWidth = pluginOptions?.barStrokeWidth || 4
+      ctx.strokeText(String(value), props.x, y)
+      ctx.fillText(String(value), props.x, y)
+    })
+
+    ctx.restore()
+  },
+}
+
 function PhaseMetricsOverview({ migrationTime }) {
   if (!migrationTime) return null
 
@@ -189,6 +236,11 @@ function PhaseDistributionChart({ phases = [] }) {
           pointStyle: 'circle',
         },
       },
+      phaseValueLabels: {
+        pieColor: '#ffffff',
+        pieStroke: 'rgba(15, 23, 42, 0.55)',
+        pieStrokeWidth: 3,
+      },
     },
     cutout: '60%',
     layout: { padding: 10 },
@@ -199,6 +251,11 @@ function PhaseDistributionChart({ phases = [] }) {
     plugins: {
       ...commonOptions.plugins,
       legend: { display: false },
+      phaseValueLabels: {
+        barColor: '#0f172a',
+        barStroke: '#ffffff',
+        barStrokeWidth: 4,
+      },
     },
     scales: {
       x: {
@@ -271,9 +328,9 @@ function PhaseDistributionChart({ phases = [] }) {
         </div>
         <div className={viewMode === 'pie' ? 'h-[320px]' : 'h-[320px]'}>
           {viewMode === 'pie' ? (
-            <Doughnut data={chartData} options={pieOptions} />
+            <Doughnut data={chartData} options={pieOptions} plugins={[phaseValueLabelsPlugin]} />
           ) : (
-            <Bar data={chartData} options={barOptions} />
+            <Bar data={chartData} options={barOptions} plugins={[phaseValueLabelsPlugin]} />
           )}
         </div>
         <p className="text-xs text-liax-neutral">Clique em uma fase para abrir a lista das migrações relacionadas.</p>
