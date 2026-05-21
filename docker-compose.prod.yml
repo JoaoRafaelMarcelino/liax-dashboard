@@ -4,16 +4,20 @@ services:
     image: liax-backend:latest
     container_name: liax-backend-dashboard
     ports:
-      - "4001:8000"
+      - "4002:8000"
     env_file:
       - .env.prod
+    environment:
+      DATABASE_URL: postgresql://admin:1i4x%40Liax@host.docker.internal:5432/dashboard
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     restart: unless-stopped
 
   frontend:
     image: liax-frontend:latest
     container_name: liax-frontend-dashboard
     ports:
-      - "5001:80"
+      - "5003:80"
     depends_on:
       - backend
     restart: unless-stopped
@@ -22,14 +26,9 @@ services:
     image: liax-legacy:latest
     container_name: clickup-dashboard-legacy
     ports:
-      - "5002:5000"
+      - "5004:5000"
     env_file:
       - .env.prod
     environment:
       ENABLE_AUTO_RELOAD: "false"
-    volumes:
-      - ./old/app.py:/app/app.py
-      - ./old/templates:/app/templates
-      - ./projects.json:/app/projects.json
-      - ./cache:/app/cache
     restart: unless-stopped

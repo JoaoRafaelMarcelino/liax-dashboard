@@ -13,8 +13,11 @@ docker load -i "$EC2_DIR/liax-backend.tar"
 docker load -i "$EC2_DIR/liax-frontend.tar"
 docker load -i "$EC2_DIR/liax-legacy.tar"
 
+echo ">> Parando containers anteriores..."
+docker compose -f "$EC2_DIR/docker-compose.prod.yml" down 2>/dev/null || true
+
 echo ">> Subindo containers..."
-docker compose -f "$EC2_DIR/docker-compose.prod.yml" up -d
+docker compose -f "$EC2_DIR/docker-compose.prod.yml" up -d --force-recreate
 
 echo ""
 echo "Pronto! Containers no ar:"
