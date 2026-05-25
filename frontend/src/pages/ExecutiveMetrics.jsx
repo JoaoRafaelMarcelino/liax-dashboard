@@ -6,7 +6,7 @@ import LineChart from '../components/Charts/LineChart'
 import BarChart from '../components/Charts/BarChart'
 import DoughnutChart from '../components/Charts/DoughnutChart'
 import TaskModal from '../components/UI/TaskModal'
-import { Zap, Turtle, RotateCcw, Loader2, ChevronDown, ChevronUp, CheckSquare, CalendarCheck, Hash, Code2, FlaskConical, PackageCheck, Rocket, Timer, X, Bug, TriangleAlert } from 'lucide-react'
+import { Zap, Turtle, RotateCcw, Loader2, ChevronDown, ChevronUp, CheckSquare, CalendarCheck, Hash, Code2, FlaskConical, PackageCheck, Rocket, Timer, X, Bug, TriangleAlert, Layers } from 'lucide-react'
 import InfoTooltip from '../components/UI/InfoTooltip'
 import ForecastSection from '../components/Forecast/ForecastSection'
 
@@ -234,6 +234,117 @@ function WeekFilter({ weeks, start, end, onStartChange, onEndChange, onReset }) 
 }
 
 
+const TYPE_FILTER_OPTIONS = [
+  { key: 'all',       label: 'Todos' },
+  { key: 'migracoes', label: 'Migrações' },
+  { key: 'bugs',      label: 'Bugs' },
+  { key: 'melhorias', label: 'Melhorias' },
+]
+
+function PhaseWeekChart({ phase, onTasksClick }) {
+  const [typeFilter, setTypeFilter] = useState('all')
+
+  const rawData = phase.by_type?.[typeFilter] || []
+
+  const headerActions = (
+    <div className="flex items-center gap-1 flex-wrap">
+      {TYPE_FILTER_OPTIONS.map((opt) => (
+        <button
+          key={opt.key}
+          onClick={() => setTypeFilter(opt.key)}
+          className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors border ${
+            typeFilter === opt.key
+              ? 'text-white border-transparent'
+              : 'bg-white border-gray-200 text-liax-neutral hover:border-gray-300'
+          }`}
+          style={typeFilter === opt.key ? { background: phase.color, borderColor: phase.color } : {}}
+        >
+          {opt.label}
+        </button>
+      ))}
+    </div>
+  )
+
+  return (
+    <div className="bg-white rounded-2xl shadow-liax-xl p-6">
+      <div className="flex items-start justify-between gap-3 mb-1 flex-wrap">
+        <div className="flex items-center gap-2">
+          <span className="w-3 h-3 rounded-full shrink-0" style={{ background: phase.color }} />
+          <h3 className="font-heading font-bold text-liax-text-dark text-base">{phase.label}</h3>
+        </div>
+        {headerActions}
+      </div>
+      <p className="text-liax-neutral text-xs mb-4">Quantidade de tarefas que concluíram esta fase por semana</p>
+      {rawData.length === 0 ? (
+        <div className="h-56 flex items-center justify-center text-sm text-liax-neutral">Sem dados para o filtro selecionado</div>
+      ) : (
+        <div className="h-56">
+          {(() => {
+            const { Line } = require('react-chartjs-2')
+            const { formatWeekWithRange } = require('../utils/dateHelpers')
+            const labels = rawData.map((d) => formatWeekWithRange(d.week))
+            const values = rawData.map((d) => d.count)
+            const chartData = {
+              labels,
+              datasets: [{
+                label: phase.label,
+                data: values,
+                borderColor: phase.color,
+                backgroundColor: phase.color + '22',
+                tension: 0.3,
+                fill: true,
+                pointBackgroundColor: phase.color,
+                pointRadius: 4,
+              }],
+            }
+            const options = {
+              responsive: true,
+              maintainAspectRatio: false,
+              onClick: (_, elements) => {
+                if (!elements.length) return
+                const idx = elements[0].index
+                const weekData = rawData[idx]
+                if (weekData?.tasks?.length) {
+                  onTasksClick?.({
+                    phaseLabel: phase.label,
+                    week: formatWeekWithRange(weekData.week),
+                    tasks: weekData.tasks,
+                  })
+                }
+              },
+              plugins: {
+                legend: { display: false },
+                tooltip: { mode: 'index', intersect: false },
+              },
+              scales: {
+                y: { beginAtZero: true, ticks: { stepSize: 1 }, grid: { color: '#f0f0f0' } },
+                x: { grid: { display: false } },
+              },
+            }
+            return <Line data={chartData} options={options} />
+          })()}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function PhaseWeekSection({ phases, onTasksClick }) {
+  return (
+    <div>
+      <h2 className="font-heading font-semibold text-liax-text-dark mb-1">Throughput por Fase por Semana</h2>
+      <p className="text-liax-neutral text-sm mb-4">
+        Quantidade de tarefas que concluíram cada fase por semana — identifique gargalos no pipeline
+      </p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {phases.map((phase) => (
+          <PhaseWeekChart key={phase.key} phase={phase} onTasksClick={onTasksClick} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function ExecutiveMetrics() {
   const [weeks, setWeeks] = useState([])
   const [weekStart, setWeekStart] = useState('')
@@ -269,6 +380,8 @@ export default function ExecutiveMetrics() {
   const [showHomologacaoSection, setShowHomologacaoSection] = useState(true)
   const [forecastData, setForecastData] = useState(null)
   const [excludeExtremes, setExcludeExtremes] = useState(false)
+  const [phasesPerWeek, setPhasesPerWeek] = useState([])
+  const [phaseWeekModal, setPhaseWeekModal] = useState(null)
 
   function openTaskFromList(task) {
     setSelectedTask(task)
@@ -340,6 +453,8 @@ export default function ExecutiveMetrics() {
     } else {
       setLoading(true)
     }
+
+    dashboardAPI.phasesPerWeek(params).then((r) => setPhasesPerWeek(r.data))
 
     Promise.all([
       dashboardAPI.migrationsPerWeek(params),
@@ -877,6 +992,42 @@ export default function ExecutiveMetrics() {
                       {task.status_name || '—'}
                     </span>
                   </div>
+                </button>
+              )}
+            />
+          )}
+
+          {/* Throughput por Fase por Semana */}
+          {phasesPerWeek.length > 0 && (
+            <PhaseWeekSection
+              phases={phasesPerWeek}
+              onTasksClick={(payload) => setPhaseWeekModal(payload)}
+            />
+          )}
+
+          {phaseWeekModal && (
+            <TaskListModal
+              title={`${phaseWeekModal.phaseLabel} — ${phaseWeekModal.week}`}
+              subtitle={`${phaseWeekModal.tasks.length} tarefas nesta semana`}
+              icon={Layers}
+              gradient="bg-gradient-to-r from-slate-700 to-slate-500"
+              tasks={phaseWeekModal.tasks}
+              onTaskClick={openTaskFromList}
+              onClose={() => setPhaseWeekModal(null)}
+              renderRow={(task, onClick) => (
+                <button key={task.id} onClick={onClick}
+                  className="w-full flex items-center justify-between px-6 py-3 hover:bg-slate-50 transition-colors text-left group">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <span className="w-2 h-2 rounded-full shrink-0" style={{ background: task.status_color || '#94a3b8' }} />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-liax-text-dark truncate group-hover:text-slate-700">{task.name}</p>
+                      {task.programa && <p className="text-xs text-liax-neutral">{task.programa}</p>}
+                    </div>
+                  </div>
+                  <span className="text-xs px-2 py-0.5 rounded-full font-medium shrink-0 ml-4"
+                    style={{ background: (task.status_color || '#94a3b8') + '22', color: task.status_color || '#94a3b8' }}>
+                    {task.status_name || '—'}
+                  </span>
                 </button>
               )}
             />

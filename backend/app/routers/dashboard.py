@@ -140,6 +140,68 @@ def summary(db: Session = Depends(get_db), _: User = Depends(get_current_user)):
     }
 
 
+PHASE_THROUGHPUT = [
+    {"key": "dev",        "label": "Desenvolvimento Finalizado", "color": "#0074e8", "field": "desenv_front_finalizado"},
+    {"key": "qa",         "label": "QA Finalizado",              "color": "#6366f1", "field": "qa_finalizado"},
+    {"key": "hml_lib",    "label": "Liberação HML Lello",        "color": "#f97316", "field": "liberacao_hml_lello"},
+    {"key": "hml_aprov",  "label": "Aprovação HML Lello",        "color": "#17dd30", "field": "aprovacao_hml_lello"},
+    {"key": "prod_aplic", "label": "Aplicação em Produção",      "color": "#cc3366", "field": "aplicacao_producao"},
+    {"key": "prod_aprov", "label": "Aprovação em Produção",      "color": "#1c3775", "field": "aprovacao_prod_lello"},
+]
+
+TYPE_IDS = {"migracoes": 0, "bugs": 1004, "melhorias": 1005}
+
+
+@router.get("/phases-per-week")
+def phases_per_week(
+    week_start: Optional[str] = Query(None),
+    week_end: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_user),
+):
+    all_tasks = db.query(Task).all()
+    result = []
+
+    for phase_def in PHASE_THROUGHPUT:
+        field_name = phase_def["field"]
+        by_type: dict = {}
+
+        for type_key in ("all", "migracoes", "bugs", "melhorias"):
+            week_map: dict = {}
+            for task in all_tasks:
+                if type_key != "all":
+                    if task.custom_item_id != TYPE_IDS.get(type_key):
+                        continue
+                dt = getattr(task, field_name, None)
+                if not dt:
+                    continue
+                week = _iso_week(dt)
+                if week_start and week < week_start:
+                    continue
+                if week_end and week > week_end:
+                    continue
+                if week not in week_map:
+                    week_map[week] = {"week": week, "count": 0, "tasks": []}
+                week_map[week]["count"] += 1
+                week_map[week]["tasks"].append({
+                    "id": task.id,
+                    "name": task.name,
+                    "programa": task.programa,
+                    "status_name": task.status_name,
+                    "status_color": task.status_color,
+                })
+            by_type[type_key] = sorted(week_map.values(), key=lambda x: x["week"])
+
+        result.append({
+            "key": phase_def["key"],
+            "label": phase_def["label"],
+            "color": phase_def["color"],
+            "by_type": by_type,
+        })
+
+    return result
+
+
 @router.get("/migrations-per-week")
 def migrations_per_week(
     week_start: Optional[str] = Query(None),

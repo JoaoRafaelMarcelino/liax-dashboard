@@ -65,6 +65,7 @@ export const dashboardAPI = {
   productionSection: () => api.get('/dashboard/production-section'),
   bugsHmlMigrations: () => api.get('/dashboard/bugs-hml-migrations'),
   forecastData: () => api.get('/dashboard/forecast-data'),
+  phasesPerWeek: (params) => api.get('/dashboard/phases-per-week', { params }),
 }
 
 export const configAPI = {
